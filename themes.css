@@ -1,0 +1,138 @@
+:root {
+    --bg: #0f172a;
+    --dark: #1e293b;
+    --light: #475569;
+    --gold: #fbbf24;
+    --blue: #3b82f6;
+    --purp: #d946ef;
+    --red: #ef4444;
+    --orange: #a3d4e8;
+    --fiol: #1c7094;
+
+    --background: linear-gradient(180deg, #120038, #001526);
+}
+
+/* Анимации */
+@keyframes glowPurple {
+    0% {
+        stroke-opacity: 1;
+        filter: drop-shadow(0 0 6px rgba(170, 80, 247, 0.8));
+    }
+    50% {
+        stroke-opacity: 0.4;
+        filter: drop-shadow(0 0 14px rgba(170, 80, 247, 1));
+    }
+    100% {
+        stroke-opacity: 1;
+        filter: drop-shadow(0 0 6px rgba(170, 80, 255, 0.8));
+    }
+}
+
+@keyframes pulse {
+    0%,100% {
+        filter: drop-shadow(0 0 5px var(--purp));
+    }
+    50% {
+        filter: drop-shadow(0 0 15px var(--purp));
+    }
+}
+
+/* Линия последнего хода */
+.last-move-line {
+    filter: drop-shadow(0 0 12px rgba(255, 220, 0, 0.9));
+    animation: glowLine 1s infinite;
+}
+
+.last-move-purple {
+    animation: glowPurple 1.2s infinite ease-in-out;
+}
+
+/* Спец-классы фигур */
+.piece.archon {
+    color: var(--gold) !important;
+    filter: drop-shadow(0 0 10px var(--gold));
+}
+
+.piece.legion {
+    color: #ff7c00 !important;
+    text-shadow:
+        -1px -1px 1px rgba(0,0,0,0.65),
+        1px -1px 1px rgba(0,0,0,0.65),
+        -1px 1px 1px rgba(0,0,0,0.65),
+        1px 1px 1px rgba(0,0,0,0.65),
+        0 0 6px rgba(59,130,246,0.85),
+        0 0 10px rgba(59,130,246,0.55);
+}
+
+.piece.chimera {
+    color: var(--purp) !important;
+    filter: drop-shadow(0 0 10px var(--purp));
+    animation: pulse 2s infinite;
+}
+
+.piece.heavy {
+    color: #f43f5e !important;
+    filter: drop-shadow(0 0 10px #f43f5e);
+}
+
+/* Светлый архонт */
+.piece.archon-light {
+    color: #f6d24a !important;
+    text-shadow:
+        -1px -1px 1px rgba(0,0,0,0.4),
+        1px -1px 1px rgba(0,0,0,0.4),
+        -1px 1px 1px rgba(0,0,0,0.4),
+        1px 1px 1px rgba(0,0,0,0.4),
+        0 0 6px rgba(255,215,0,0.7);
+    filter: none;
+}
+
+/* Тёмный архонт */
+.piece.archon-dark {
+    color: #cc3fd3 !important;
+    text-shadow:
+        -1px -1px 1px rgba(0,0,0,0.5),
+        1px -1px 1px rgba(0,0,0,0.5),
+        -1px 1px 1px rgba(0,0,0,0.5),
+        1px 1px 1px rgba(0,0,0,0.5),
+        0 0 6px rgba(66,196,232,0.8);
+    filter: none;
+}
+
+/* Фон страницы */
+body {
+    background: var(--background);
+}
+
+/* Модальное окно */
+.modal {
+    backdrop-filter: blur(5px);
+    background: rgba(0,0,0,0.9);
+}
+
+/* Мобильная адаптация */
+@media (max-width: 700px) {
+    body {
+        overflow: auto;
+    }
+
+    .board-wrapper {
+        max-width: 95vw !important;
+        width: 95vw !important;
+        height: 95vw !important;
+        aspect-ratio: 1 !important;
+    }
+
+    .cell {
+        font-size: 6vw !important;
+    }
+
+    .piece {
+        max-width: 85% !important;
+        max-height: 85% !important;
+    }
+
+    #log {
+        max-height: 150px;
+    }
+}

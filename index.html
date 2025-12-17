@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chess 2.0 — Modular Edition</title>
+
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+    <!-- Socket.io -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./themes.css" />
+</head>
+
+<body class="flex flex-col md:flex-row h-screen">
+    <!-- SIDEBAR -->
+    <div class="w-full md:w-80 bg-[#020617] p-6 border-r border-[#1e293b] flex flex-col z-20 shadow-2xl overflow-y-auto">
+        <h1 class="text-3xl font-bold title-font mb-1 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">
+            ШАХМАТЫ 2.0
+        </h1>
+        <div class="text-xs text-gray-500 mb-6 font-mono">LAN / MODULAR EDITION</div>
+
+        <div class="stat-box">
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-xs text-gray-400">ХОД</span>
+                <span id="turn-display" class="font-bold text-white bg-slate-700 px-2 py-1 rounded">БЕЛЫЕ</span>
+            </div>
+            <div class="text-[10px] text-gray-500 flex justify-between">
+                <span>Режим: <span id="mode-display" class="text-blue-400">КЛАССИКА</span></span>
+                <span>Лояльность: <span id="loyalty" class="text-white">3</span></span>
+            </div>
+        </div>
+
+        <div class="text-[10px] text-gray-400 flex justify-between mt-1">
+            <span>Мораль Белых: <span id="morale-w" class="text-emerald-400">10</span></span>
+            <span>Мораль Черных: <span id="morale-b" class="text-emerald-400">10</span></span>
+        </div>
+
+        <div class="stat-box">
+            <div id="online-status" class="text-[10px] text-gray-500 mb-2 font-bold">СЕТЬ: НЕ ПОДКЛЮЧЕНА</div>
+
+            <div id="connection-panel" class="mb-4 pb-4 border-b border-gray-700">
+                <label class="text-[10px] text-gray-400 block mb-1">IP сервера (host:3000)</label>
+                <input id="server-ip" type="text" placeholder="26.123.45.67:3000" class="dark-input mb-2 text-xs">
+                <button id="btn-connect" class="btn btn-primary text-xs">Подключиться</button>
+            </div>
+
+            <div id="lobby-panel" class="hidden">
+                <button id="btn-host" class="btn btn-primary mb-2">Создать Комнату</button>
+                <div class="flex gap-2 mb-3">
+                    <input id="room-input" class="w-2/3 bg-slate-900 border border-slate-600 px-3 text-white uppercase outline-none text-sm rounded" placeholder="ID">
+                    <button id="btn-join" class="w-1/3 btn text-xs py-2 m-0">Войти</button>
+                </div>
+                <div class="border-t border-gray-700 pt-2">
+                    <div class="text-[10px] text-gray-400 mb-1">Доступные комнаты:</div>
+                    <div id="room-list-container" class="max-h-[100px] overflow-y-auto"></div>
+                </div>
+            </div>
+
+            <div id="online-active-ui" class="hidden text-center">
+                <div id="room-display" class="text-2xl font-mono text-green-400 border border-green-900 p-2 bg-black select-all mb-1 rounded tracking-widest">---</div>
+                <div id="online-msg" class="text-[10px] text-gray-400">Ожидание...</div>
+            </div>
+        </div>
+
+        <div class="stat-box text-xs">
+            <div class="flex justify-between mb-1">
+                <span class="text-gray-400">Потери Белых</span>
+                <span id="loss-w" class="text-red-400 font-bold text-lg">0</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-gray-400">Потери Черных</span>
+                <span id="loss-b" class="text-red-400 font-bold text-lg">0</span>
+            </div>
+        </div>
+
+        <div id="log" class="flex-1 bg-black p-3 font-mono text-[10px] text-green-500 overflow-y-auto border border-gray-800 rounded leading-relaxed">
+            <div>> Система готова.</div>
+        </div>
+        <button id="btn-reload" class="btn mt-4 bg-slate-800">Перезагрузка</button>
+        <button id="btn-ai" class="btn bg-purple-700 mt-2">ИГРАТЬ С ИИ</button>
+    </div>
+    <!-- BOARD -->
+    <div class="flex-1 flex items-center justify-center p-4 relative overflow-hidden">
+        <div id="board" class="board-wrapper shadow-2xl relative z-10">
+            <div id="cells-container" class="absolute inset-0 grid grid-cols-8 grid-rows-8"></div>
+            <svg id="svg-overlay" class="absolute inset-0 pointer-events-none" width="100%" height="100%" style="z-index: 30;"></svg>
+        </div>
+    </div>
+    <!-- END MODAL -->
+    <div id="end-modal" class="modal">
+        <div class="bg-gray-900 p-8 border border-gray-700 text-center rounded-xl shadow-2xl max-w-md w-full">
+            <h2 id="end-title" class="text-4xl title-font font-bold mb-6">МАТ</h2>
+            <p id="end-desc" class="text-gray-400 text-sm mb-6">Игра окончена.</p>
+            <div id="end-buttons" class="flex flex-col gap-3">
+                <button id="btn-new-mode" class="btn btn-primary py-4 text-lg shadow-lg shadow-blue-900/50">ВОСКРЕСИТЬ АРМИЮ</button>
+                <button id="btn-restart" class="btn">Новая Игра</button>
+            </div>
+            <div id="winner-wait-msg" class="hidden text-emerald-400 font-mono animate-pulse">ОЖИДАНИЕ...</div>
+        </div>
+    </div>
+    <!-- DIP MODAL -->
+    <div id="dip-modal" class="modal">
+        <div class="bg-slate-800 p-6 border-2 border-purple-500 text-center rounded-xl shadow-xl max-w-sm">
+            <h3 class="text-2xl font-bold text-purple-400 mb-2">ПРЕДЛОЖЕНИЕ СОЮЗА</h3>
+            <p class="text-gray-300 text-sm mb-6">
+                Вражеский конь предлагает создать Химеру.<br>
+                <span class="text-red-400 font-bold">Отказ приведёт к битве.</span>
+            </p>
+            <div class="flex gap-4">
+                <button id="btn-accept" class="btn bg-purple-600">ПРИНЯТЬ</button>
+                <button id="btn-decline" class="btn bg-red-600">ОТКАЗАТЬ</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        window.GP = {
+            k: '♔', q: '♕', r: '♖', b: '♗', n: '♘', p: '♙',
+            a: '♖', c: '♖', h: '♞', x: '♞', z: '♕',
+            K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞', P: '♟',
+            A: '♜', C: '♜', H: '♘', X: '♘', Z: '♛'
+        };
+        
+
+    </script>
+    <!-- SCRIPT MODULES (ПРАВИЛЬНЫЙ ПОРЯДОК) -->
+    <script src="./js/rules.js"></script>
+    <script src="./js/engine.js"></script>
+    <script src="./js/chimera.js"></script>
+
+    <script src="./js/ai.js"></script>
+    <script src="./js/online.js"></script>
+    <script src="./js/render.js"></script>
+    <script src="./js/ui.js"></script>
+
+
+    <script>
+        window.skipOnlineInit = true;
+    </script>
+
+
+    <script>
+        window.onload = () => {
+            initGame();
+            window.gameReady = true;
+        };
+
+    </script>
+</body>
+</html>
