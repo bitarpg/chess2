@@ -1,10 +1,26 @@
 const express = require('express');
 const app = express();
 const http = require('http');
+const path = require('path'); // Добавлено для работы с путями
 const server = http.createServer(app);
 const { Server } = require("socket.io");
 
-// Настройка CORS
+// ==========================================
+// РАЗДАЧА ФАЙЛОВ (STATIC FILES)
+// ==========================================
+
+// Разрешаем серверу отдавать все файлы из текущей папки (styles.css, темы и т.д.)
+app.use(express.static(path.join(__dirname, './')));
+
+// Отправляем index.html при заходе на главную страницу
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// ==========================================
+// НАСТРОЙКА SOCKET.IO
+// ==========================================
+
 const io = new Server(server, {
   cors: {
     origin: "*",
@@ -12,28 +28,14 @@ const io = new Server(server, {
   }
 });
 
-const PORT = 3000;
+// На Render порт назначается автоматически, 3000 — это запасной вариант
+const PORT = process.env.PORT || 3000;
 
 // Хранилище игровых комнат
 let rooms = {};
 
-// Функция рассылки списка комнат всем
-function broadcastRoomList() {
-    const list = [];
-    for (const [id, room] of Object.entries(rooms)) {
-        // Показываем только комнаты, где есть место (меньше 2 игроков)
-        if (room.players.length < 2) {
-            list.push({ id: id, count: room.players.length });
-        }
-    }
-    io.emit('room_list', list);
-}
-
 io.on('connection', (socket) => {
   console.log('Новое подключение:', socket.id);
-  
-  // Сразу отправляем список комнат новому игроку
-  broadcastRoomList();
 
   // Создание комнаты
   socket.on('create_room', (roomId) => {
@@ -45,8 +47,7 @@ io.on('connection', (socket) => {
     rooms[roomId] = {
       players: [socket.id],
       board: null,
-      turn: 'white',
-      mode: 'classic' // Храним режим игры
+      turn: 'white'
     };
     
     socket.join(roomId);
@@ -55,12 +56,10 @@ io.on('connection', (socket) => {
         roomId: roomId, 
         color: 'white',
         board: getDefaultBoard(),
-        turn: 'white',
-        mode: 'classic'
+        turn: 'white'
     });
     
     console.log(`Комната ${roomId} создана игроком ${socket.id}`);
-    broadcastRoomList(); // Обновляем список у всех
   });
 
   // Вход в комнату
@@ -79,38 +78,37 @@ io.on('connection', (socket) => {
     room.players.push(socket.id);
     socket.join(roomId);
 
-    // Уведомляем создателя
     io.to(room.players[0]).emit('player_joined', { roomId });
 
-    // Запускаем игру для вошедшего (Черные)
     socket.emit('game_start', { 
         roomId: roomId, 
         color: 'black',
         board: room.board || getDefaultBoard(),
-        turn: room.turn,
-        mode: room.mode || 'classic'
+        turn: room.turn 
     });
 
     console.log(`Игрок ${socket.id} вошел в ${roomId}`);
-    broadcastRoomList(); // Комната заполнилась, обновляем список
   });
 
   // Ход
   socket.on('make_move', (data) => {
-    const { roomId, board, turn, lastMove, mode } = data;
+    const { roomId, board, turn, lastMove, castling, mode, moveCount, chimeraTracker } = data;
     const room = rooms[roomId];
     
     if (room) {
       room.board = board;
       room.turn = turn;
-      if (mode) room.mode = mode; // Обновляем режим на сервере
 
       io.in(roomId).emit('receive_move', {
         board: board,
         turn: turn,
         lastMove: lastMove,
-        mode: mode
+        castling: castling,
+        mode: mode,
+        moveCount: moveCount,
+        chimeraTracker: chimeraTracker
       });
+      console.log(`Ход в комнате ${roomId}: ${turn}`);
     }
   });
 
@@ -118,24 +116,12 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     console.log('Игрок отключился:', socket.id);
     for (const id in rooms) {
-        const room = rooms[id];
-        const index = room.players.indexOf(socket.id);
-        if (index !== -1) {
-            room.players.splice(index, 1); // Удаляем игрока из списка
-            
-            // Если в комнате никого не осталось - удаляем комнату
-            if (room.players.length === 0) {
-                delete rooms[id];
-            } else {
-                // Если кто-то остался, уведомляем его
-                socket.to(id).emit('opponent_left');
-                // Можно также удалить комнату, чтобы не висела "сломанная" игра
-                delete rooms[id]; 
-            }
-            break;
-        }
+      if (rooms[id].players.includes(socket.id)) {
+        socket.to(id).emit('opponent_left');
+        delete rooms[id];
+        break;
+      }
     }
-    broadcastRoomList(); // Обновляем список
   });
 });
 
