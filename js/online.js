@@ -139,7 +139,7 @@ window.setupSocketListeners = function () {
         }
 
         // 2. СИНХРОНИЗАЦИЯ РЕЖИМА И ФЛАГОВ ВОЗРОЖДЕНИЯ (Исправление рассинхрона)
-        // Эти флаги критически важны для предотвращения "Ложного мата"
+        const oldMode = window.gameMode;
         if (data.mode) window.gameMode = data.mode;
         if (data.whiteRevived !== undefined) window.whiteRevived = data.whiteRevived;
         if (data.blackRevived !== undefined) window.blackRevived = data.blackRevived;
@@ -147,7 +147,11 @@ window.setupSocketListeners = function () {
         if (window.gameMode === "new_mode") {
             window.kingDead = true;
             window.newModePlayer = data.newModePlayer || window.newModePlayer;
-            window.log("Синхронизация: Активен НОВЫЙ РЕЖИМ (Воскрешение).");
+
+            // ИСПРАВЛЕНИЕ: Выводим в лог только один раз при смене режима, чтобы не спамить каждый ход
+            if (oldMode !== "new_mode") {
+                window.log("Синхронизация: Активен НОВЫЙ РЕЖИМ (Воскрешение).");
+            }
         }
 
         // 3. ПРОВЕРКА НА ПРЕДЛОЖЕНИЕ СОЮЗА (ХИМЕРА)

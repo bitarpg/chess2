@@ -382,21 +382,43 @@ window.checkGameState = function () {
 
     // Логика завершения
     if (!hasMoves) {
-        if (isCheck) {
-            log(`МАТ! Победили ${window.turn === 'white' ? 'Черные' : 'Белые'}`);
-            document.getElementById("end-title").innerText = (window.turn === "white" ? "БЕЛЫМ" : "ЧЕРНЫМ") + " МАТ";
+        const turnTitle = (window.turn === "white" ? "БЕЛЫМ" : "ЧЕРНЫМ");
+        document.getElementById("end-title").innerText = isCheck ? turnTitle + " МАТ" : "ПАТ";
 
-            // Проверка: можно ли воскреснуть?
-            const canRevive = (window.turn === "white" ? !window.whiteRevived : !window.blackRevived);
-            document.getElementById("btn-new-mode").style.display = canRevive ? "inline-flex" : "none";
+        const btnNewMode = document.getElementById("btn-new-mode");
+        const btnRestart = document.getElementById("btn-restart");
+        const waitMsg = document.getElementById("winner-wait-msg"); // Сообщение об ожидании
+        const endButtons = document.getElementById("end-buttons");
 
-            document.getElementById("end-modal").classList.add("active");
+        const canRevive = (window.turn === "white" ? !window.whiteRevived : !window.blackRevived);
+
+        // ИСПРАВЛЕНИЕ ОКНА ВЫБОРА (ОНЛАЙН)
+        const myColor = (typeof window.getOnlineColor === 'function') ? window.getOnlineColor() : null;
+        const isOnline = (typeof window.isOnlineActive === 'function') && window.isOnlineActive();
+
+        if (isOnline && myColor) {
+            // Если сейчас ход того, кому поставили мат (т.е. мне, если myColor === turn)
+            if (myColor === window.turn) {
+                // Я проиграл. Вижу кнопки.
+                btnNewMode.style.display = (isCheck && canRevive) ? "inline-flex" : "none";
+                btnRestart.style.display = "inline-flex";
+                if (waitMsg) waitMsg.classList.add("hidden");
+                if (endButtons) endButtons.classList.remove("hidden");
+            } else {
+                // Я победил. Жду решения соперника.
+                btnNewMode.style.display = "none";
+                btnRestart.style.display = "none";
+                if (waitMsg) waitMsg.classList.remove("hidden");
+                if (endButtons) endButtons.classList.add("hidden");
+                log("ОЖИДАНИЕ: Соперник решает, стоит ли продолжать битву...");
+            }
         } else {
-            log("ПАТ! Ничья.");
-            document.getElementById("end-title").innerText = "ПАТ";
-            document.getElementById("btn-new-mode").style.display = "none";
-            document.getElementById("end-modal").classList.add("active");
+            // Локальная игра - показываем всё как обычно
+            btnNewMode.style.display = (isCheck && canRevive) ? "inline-flex" : "none";
+            btnRestart.style.display = "inline-flex";
         }
+
+        document.getElementById("end-modal").classList.add("active");
     } else {
         // Если ходы есть, окно должно быть скрыто
         document.getElementById("end-modal").classList.remove("active");
