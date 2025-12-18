@@ -1,13 +1,12 @@
 // ======================================================
-// ONLINE.JS — сетевое взаимодействие Chess 2.0
+// ONLINE.JS — сетевое взаимодействие Chess 2.0 (ПОЛНАЯ ВЕРСИЯ)
 // ======================================================
 
-// Глобальные переменные онлайн-режима
+// Глобальные переменные сетевого состояния
 window.gameReady = false;
-
 window.socket = null;
 window.currentRoomId = null;
-window.myOnlineColor = null; // 'white' или 'black'
+window.myOnlineColor = null;
 window.isConnected = false;
 
 
@@ -16,7 +15,7 @@ window.isConnected = false;
 // ======================================================
 
 window.connectToServer = function () {
-    // На Render или других хостингах используем текущий домен
+    // Используем window.location.origin для автоматического определения адреса сервера на Render
     const serverUrl = window.location.origin;
 
     const btn = document.getElementById("btn-connect");
@@ -28,6 +27,7 @@ window.connectToServer = function () {
     // Инициализация socket.io
     window.socket = io(serverUrl);
 
+    // Событие успешного соединения
     window.socket.on("connect", () => {
         window.isConnected = true;
 
@@ -46,37 +46,40 @@ window.connectToServer = function () {
         const lobby = document.getElementById("lobby-panel");
         if (lobby) lobby.classList.remove("hidden");
 
-        log("Успешное подключение к серверу.");
+        window.log("Система: Связь с сервером установлена успешно.");
     });
 
+    // Ошибка подключения
     window.socket.on("connect_error", (err) => {
-        console.error("Ошибка подключения:", err);
+        console.error("Socket Error:", err);
         if (btn) {
             btn.innerText = "Ошибка";
             btn.disabled = false;
         }
+        window.log("Ошибка: Не удалось связаться с игровым сервером.");
     });
 
-    setupSocketListeners();
+    // Инициализируем слушателей событий
+    window.setupSocketListeners();
 };
 
 
 // ======================================================
-// СОКЕТ-СЛУШАТЕЛИ
+// СОКЕТ-СЛУШАТЕЛИ (ОБРАБОТКА СОБЫТИЙ СЕТИ)
 // ======================================================
 
 window.setupSocketListeners = function () {
     if (!window.socket) return;
 
-    // ПУНКТ №2: Список доступных комнат
+    // ПУНКТ №2: Обновление списка доступных комнат
     window.socket.on("room_list", rooms => {
         const listEl = document.getElementById("room-list-container");
         if (!listEl) return;
 
-        listEl.innerHTML = "";
+        listEl.innerHTML = ""; // Очистка списка
 
         if (rooms.length === 0) {
-            listEl.innerHTML = '<div class="text-gray-500 text-[10px] italic">Нет свободных комнат</div>';
+            listEl.innerHTML = '<div class="text-gray-500 text-[10px] italic p-1">Нет активных комнат</div>';
             return;
         }
 
@@ -92,57 +95,62 @@ window.setupSocketListeners = function () {
 
             roomBtn.innerHTML = `
                 <span class="text-blue-400 font-mono font-bold group-hover:text-blue-300">#${room.id}</span>
-                <span class="text-gray-400 text-[9px]">Игроков: ${room.count}/2</span>
+                <span class="text-gray-500 text-[9px]">Игроков: ${room.count}/2</span>
             `;
 
             listEl.appendChild(roomBtn);
         });
     });
 
+    // Уведомление о входе соперника
     window.socket.on("player_joined", data => {
-        log(`Противник вошел в комнату: ${data.roomId}`);
+        window.log(`Событие: Противник вошел в комнату ${data.roomId}`);
         const msg = document.getElementById("online-msg");
-        if (msg) msg.innerText = "Противник в игре! Начинаем...";
+        if (msg) msg.innerText = "Противник на месте! Битва начинается...";
     });
 
+    // Начало игры и распределение цветов
     window.socket.on("game_start", data => {
         window.myOnlineColor = data.color;
         window.currentRoomId = data.roomId;
         window.moveCount = 0;
 
-        // Синхронизируем состояние
+        // Полная синхронизация состояния доски
         window.syncBoardFromOnline(data.board, data.turn, data.castling);
 
-        // ПУНКТ №3: Переворот доски для черного игрока
+        // ПУНКТ №3: Автоматический переворот доски для черных
         if (window.setBoardFlip) {
             window.setBoardFlip(window.myOnlineColor === 'black');
         }
 
-        enterOnlineMode(
+        window.enterOnlineMode(
             data.roomId,
-            `Цвет: ${window.myOnlineColor === 'white' ? 'БЕЛЫЕ' : 'ЧЕРНЫЕ'}`
+            `ВАШ ЦВЕТ: ${window.myOnlineColor === 'white' ? 'БЕЛЫЕ' : 'ЧЕРНЫЕ'}`
         );
 
-        log(`Битва началась! Вы играете за ${window.myOnlineColor === 'white' ? 'БЕЛЫХ' : 'ЧЕРНЫХ'}`);
+        window.log(`Игра началась! Вы командуете ${window.myOnlineColor === 'white' ? 'белыми' : 'черными'} силами.`);
     });
 
+    // ПУНКТ №4: Обработка входящего хода или предложения (Дипломатия)
     window.socket.on("receive_move", data => {
+        // Синхронизация общего счетчика ходов
         if (typeof data.moveCount !== "undefined") {
             window.moveCount = data.moveCount;
         }
 
-        // Синхронизация режима (например, Воскрешение)
+        // Синхронизация игрового режима (Воскрешение)
         if (data.mode && window.gameMode !== data.mode) {
             window.gameMode = data.mode;
             if (data.mode === "new_mode") {
                 window.kingDead = true;
                 window.newModePlayer = data.newModePlayer || data.turn;
+                window.log("ВНИМАНИЕ: Противник возродил армию! Цель изменена.");
             }
         }
 
-        // ПУНКТ №4: Обработка предложения союза (Химера) в онлайне
+        // ПРОВЕРКА НА ПРЕДЛОЖЕНИЕ СОЮЗА (ХИМЕРА)
         if (data.lastMove && data.lastMove.proposal) {
-            // Если ход не наш — показываем окно дипломатии
+            // Если предложение пришло НЕ от нас — показываем модальное окно
             if (window.myOnlineColor !== data.turn) {
                 window.pendingMove = {
                     from: data.lastMove.from,
@@ -150,23 +158,26 @@ window.setupSocketListeners = function () {
                     attackerColor: window.getCol(data.board[data.lastMove.to.r][data.lastMove.to.c])
                 };
 
-                // Подсвечиваем фигуру агрессора для наглядности
+                // Визуально подсвечиваем атакующую фигуру
                 window.selected = data.lastMove.from;
 
                 window.render();
-                document.getElementById("dip-modal").classList.add("active");
-                log("ПОЛУЧЕНО ПРЕДЛОЖЕНИЕ СОЮЗА!");
+                const dipModal = document.getElementById("dip-modal");
+                if (dipModal) dipModal.classList.add("active");
+
+                window.log("ДИПЛОМАТИЯ: Получено предложение о создании Химеры!");
             } else {
-                log("Предложение союза передано оппоненту...");
-                // Очищаем выделение у отправителя, чтобы не мешало
+                window.log("Система: Предложение союза передано оппоненту.");
+                // Очищаем выделение у отправителя
                 window.selected = null;
                 window.moves = [];
                 window.render();
             }
         }
         else {
-            // Обычный ход — полная синхронизация
-            document.getElementById("dip-modal").classList.remove("active");
+            // ОБЫЧНЫЙ ХОД — полная синхронизация данных
+            const dipModal = document.getElementById("dip-modal");
+            if (dipModal) dipModal.classList.remove("active");
 
             window.syncBoardFromOnline(
                 data.board,
@@ -177,40 +188,49 @@ window.setupSocketListeners = function () {
 
             window.lastMoveData = data.lastMove || null;
 
+            // Обновляем визуальную часть
             window.render();
             window.updateUI();
+
+            // Проверяем состояние игры (мат/пат)
             window.checkGameState();
         }
     });
 
+    // Ошибки от сервера
     window.socket.on("error_msg", msg => {
-        log(`Ошибка: ${msg}`);
+        window.log(`Ошибка сервера: ${msg}`);
     });
 
+    // Выход соперника
     window.socket.on("opponent_left", () => {
-        log("ВНИМАНИЕ: Соперник покинул игру.");
+        window.log("ВНИМАНИЕ: Соперник покинул поле боя. Перезагрузка через 3 сек...");
         setTimeout(() => location.reload(), 3000);
     });
 };
 
 
 // ======================================================
-// УПРАВЛЕНИЕ ИГРОЙ ЧЕРЕЗ СЕТЬ
+// УПРАВЛЕНИЕ КОМНАТАМИ
 // ======================================================
 
 window.hostGame = function () {
-    if (!window.isConnected) return log("Ошибка: Нет связи с сервером.");
+    if (!window.isConnected) return window.log("Ошибка: Сначала подключитесь к серверу!");
+
     const roomId = Math.random().toString(36).substring(2, 7).toUpperCase();
     window.socket.emit("create_room", roomId);
-    enterOnlineMode(roomId, "Ожидание соперника...");
+
+    window.enterOnlineMode(roomId, "Ожидание противника...");
 };
 
 window.joinGame = function () {
-    if (!window.isConnected) return log("Ошибка: Нет связи с сервером.");
+    if (!window.isConnected) return window.log("Ошибка: Сначала подключитесь к серверу!");
+
     const input = document.getElementById("room-input");
     const roomId = input ? input.value.toUpperCase() : "";
 
-    if (!roomId) return log("Ошибка: Введите ID комнаты.");
+    if (!roomId) return window.log("Ошибка: Введите ID комнаты для входа.");
+
     window.socket.emit("join_room", roomId);
 };
 
@@ -230,7 +250,7 @@ window.enterOnlineMode = function (id, status) {
 
 
 // ======================================================
-// ОТПРАВКА ДАННЫХ В СЕТЬ
+// ОТПРАВКА ХОДА В ОБЛАКО
 // ======================================================
 
 window.sendMoveToCloud = function (
@@ -258,7 +278,7 @@ window.sendMoveToCloud = function (
 
 
 // ======================================================
-// ГЕТТЕРЫ И СТАТУС
+// ГЕТТЕРЫ И ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 // ======================================================
 
 window.getOnlineColor = () => window.myOnlineColor;

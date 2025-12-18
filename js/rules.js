@@ -22,6 +22,7 @@ window.isAttacked = function (r, c, attackerCol) {
     const check = window.inCheck(myCol, tempBoard);
 
     tempBoard[r][c] = oldVal;
+
     return check;
 };
 
@@ -333,7 +334,7 @@ window.checkGameState = function () {
     for (let r = 0; r < 8; r++)
         for (let c = 0; c < 8; c++)
             if (window.board[r][c] && getCol(window.board[r][c]) === window.turn) {
-                // ИСПРАВЛЕНИЕ: Убрали фильтрацию спец-ходов, чтобы в спец-режиме они считались за ходы
+                // ПУНКТ 5 ФИКС: Все ходы (включая спец-ходы) теперь учитываются для защиты от мата
                 const ms = getMoves(r, c, true);
                 if (ms.length > 0) hasMoves = true;
             }

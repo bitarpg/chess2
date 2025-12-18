@@ -31,7 +31,7 @@ window.castling = {
     black: { k: true, l: true, r: true }
 };
 
-// ПУНКТ №8: Состояние выбора для атакующего
+// ПУНКТ №9: Состояние выбора для атакующего
 window.choiceMade = false;
 window.pendingChoiceMove = null;
 
@@ -44,12 +44,12 @@ window.toggleAI = function () {
     window.aiEnabled = !window.aiEnabled;
 
     if (window.aiEnabled) {
-        log("Режим ИИ включён. Вы играете против робота.");
+        window.log("Режим ИИ включён. Вы играете против робота.");
         window.currentRoomId = null;
         window.myOnlineColor = null;
         window.isConnected = false;
     } else {
-        log("Режим ИИ выключен.");
+        window.log("Режим ИИ выключен.");
     }
 };
 
@@ -77,6 +77,7 @@ window.initGame = function () {
     window.moves = [];
     window.gameMode = "classic";
     window.kingDead = false;
+    window.moveCount = 0; // Сброс счетчика ходов
 
     window.loyalty = 3;
     window.pendingMove = null;
@@ -88,20 +89,23 @@ window.initGame = function () {
         black: { k: true, l: true, r: true }
     };
 
-    document.getElementById("end-modal").classList.remove("active");
-    document.getElementById("dip-modal").classList.remove("active");
-    // Скрываем окно выбора если оно было активно
+    const endModal = document.getElementById("end-modal");
+    if (endModal) endModal.classList.remove("active");
+
+    const dipModal = document.getElementById("dip-modal");
+    if (dipModal) dipModal.classList.remove("active");
+
     const attackModal = document.getElementById("attacker-choice-modal");
     if (attackModal) attackModal.classList.remove("active");
 
-    render();
-    updateUI();
-    setTimeout(() => {
-        render();
-        updateUI();
-        log("Новая партия началась.");
-    }, 0);
+    window.render();
+    window.updateUI();
 
+    setTimeout(() => {
+        window.render();
+        window.updateUI();
+        window.log("Новая партия началась.");
+    }, 0);
 };
 
 
@@ -121,18 +125,18 @@ window.clickCell = function (r, c) {
         }
     }
 
-    if (window.board[r][c] && getCol(window.board[r][c]) === window.turn) {
-        if (window.isOnlineActive() && window.getOnlineColor() && getCol(window.board[r][c]) !== window.getOnlineColor())
+    if (window.board[r][c] && window.getCol(window.board[r][c]) === window.turn) {
+        if (window.isOnlineActive() && window.getOnlineColor() && window.getCol(window.board[r][c]) !== window.getOnlineColor())
             return;
 
         window.selected = { r, c };
-        window.moves = getMoves(r, c);
-        render();
+        window.moves = window.getMoves(r, c);
+        window.render();
     }
     else {
         window.selected = null;
         window.moves = [];
-        render();
+        window.render();
     }
 };
 
@@ -142,27 +146,25 @@ window.clickCell = function (r, c) {
 // =========================================================
 
 window.doMove = function (mv) {
-
     const start = window.selected;
-    const p = window.board[start.r][start.c];
-    const type = getType(p);
-    const col = getCol(p);
+    if (!start) return;
 
-    // ПУНКТ №8: ПЕРЕХВАТ ДЛЯ ВЫБОРА АТАКИ
-    // Если конь атакует вражеского коня и выбор еще не сделан
+    const p = window.board[start.r][start.c];
+    const type = window.getType(p);
+    const col = window.getCol(p);
+
+    // ПУНКТ №9: ПЕРЕХВАТ ДЛЯ ВЫБОРА АТАКИ
     if (type === "n" && mv.prop === "chimera" && !window.choiceMade) {
-        // В онлайне окно выбора видит только тот, чей сейчас ход
         if (window.isOnlineActive() && window.getOnlineColor() !== window.turn) return;
 
         window.pendingChoiceMove = mv;
         const modal = document.getElementById("attacker-choice-modal");
         if (modal) {
             modal.classList.add("active");
-            log("ВСТРЕЧА ВСАДНИКОВ: Выберите действие...");
+            window.log("ВСТРЕЧА ВСАДНИКОВ: Выберите действие...");
             return;
         }
     }
-    // Сбрасываем флаг для следующего хода
     window.choiceMade = false;
 
     const moveDetails = {
@@ -173,11 +175,11 @@ window.doMove = function (mv) {
 
     // СЕТЕВОЙ СОЮЗ
     if (mv.prop && window.isOnlineActive()) {
-        window.sendMoveToCloud(window.board, window.turn, moveDetails, window.castling, window.gameMode);
-        log("Предложение союза отправлено...");
+        window.sendMoveToCloud(window.board, window.turn, moveDetails, window.castling, window.gameMode, window.moveCount);
+        window.log("Предложение союза отправлено...");
         window.selected = null;
         window.moves = [];
-        render();
+        window.render();
         return;
     }
 
@@ -205,27 +207,28 @@ window.doMove = function (mv) {
         if (start.r === row && start.c === 7) window.castling[window.turn].r = false;
     }
 
-    // Легион
+    // Легион / Локальная Химера
     if (type === "n") {
         const target = window.board[mv.r][mv.c];
 
-        if (target && getCol(target) === col && getType(target) === "n") {
+        if (target && window.getCol(target) === col && window.getType(target) === "n") {
             window.board[mv.r][mv.c] = (col === "white" ? "h" : "H");
             window.board[start.r][start.c] = null;
-            log("ЛЕГИОН: Объединение завершено.");
+            window.log("ЛЕГИОН: Объединение завершено.");
             window.endTurn(start.r, start.c, mv, moveDetails);
             return;
         }
 
         if (mv.prop === "chimera") {
-            const target = window.board[mv.r][mv.c];
-            if (target && getType(target) === "n" && getCol(target) !== col) {
+            const targetP = window.board[mv.r][mv.c];
+            if (targetP && window.getType(targetP) === "n" && window.getCol(targetP) !== col) {
                 window.pendingMove = mv;
                 window.pendingMove.from = start;
                 window.pendingMove.to = { r: mv.r, c: mv.c };
                 window.pendingMove.attackerColor = col;
-                document.getElementById("dip-modal").classList.add("active");
-                log("Предложение: создать ХИМЕРУ");
+                const dipModal = document.getElementById("dip-modal");
+                if (dipModal) dipModal.classList.add("active");
+                window.log("Предложение: создать ХИМЕРУ");
                 return;
             }
         }
@@ -233,14 +236,14 @@ window.doMove = function (mv) {
 
     // Archon fuse
     if (mv.fuse) {
-        const isL = isLight(start.r, start.c);
+        const isL = window.isLight(start.r, start.c);
         const code = window.turn === "white"
             ? (isL ? "a" : "c")
             : (isL ? "A" : "C");
 
         window.board[mv.r][mv.c] = code;
         window.board[start.r][start.c] = null;
-        log("СЛИЯНИЕ: Канцлер создан.");
+        window.log("СЛИЯНИЕ: Канцлер создан.");
     }
 
     // Рокировка
@@ -259,7 +262,7 @@ window.doMove = function (mv) {
             window.board[row][0] = null;
         }
 
-        log("РОКИРОВКА!");
+        window.log("РОКИРОВКА!");
     }
 
     // Обычный ход
@@ -268,9 +271,10 @@ window.doMove = function (mv) {
         window.board[start.r][start.c] = null;
 
         if (type === "p" && (mv.r === 0 || mv.r === 7)) {
+            // ИСПРАВЛЕН БАГ: Теперь черная пешка в Новом режиме становится Q (черным ферзем)
             if (window.gameMode === "new_mode") {
-                window.board[mv.r][mv.c] = window.turn === "white" ? "q" : "q";
-                log("ПРОМОУШН: Создан Ферзь.");
+                window.board[mv.r][mv.c] = window.turn === "white" ? "q" : "Q";
+                window.log("ПРОМОУШН: Создан Ферзь.");
             } else {
                 window.board[mv.r][mv.c] = window.turn === "white" ? "q" : "Q";
             }
@@ -280,21 +284,21 @@ window.doMove = function (mv) {
     window.endTurn(start.r, start.c, mv, moveDetails);
 };
 
-// ПУНКТ №8: ОБРАБОТКА ВЫБОРА АТАКУЮЩЕГО
+// ПУНКТ №9: ОБРАБОТКА ВЫБОРА АТАКУЮЩЕГО
 window.resolveAttackerChoice = function (action) {
     const mv = window.pendingChoiceMove;
     if (!mv) return;
 
-    document.getElementById("attacker-choice-modal").classList.remove("active");
+    const modal = document.getElementById("attacker-choice-modal");
+    if (modal) modal.classList.remove("active");
     window.choiceMade = true;
 
     if (action === 'attack') {
-        log("ДИПЛОМАТИЯ: Вы выбрали атаку.");
+        window.log("ДИПЛОМАТИЯ: Вы выбрали атаку.");
         mv.prop = null; // Убираем флаг химеры, делаем обычный ход
         window.doMove(mv);
     } else {
-        log("ДИПЛОМАТИЯ: Вы предложили союз.");
-        // Оставляем mv.prop === "chimera" и запускаем doMove заново
+        window.log("ДИПЛОМАТИЯ: Вы предложили союз.");
         window.doMove(mv);
     }
 };
@@ -316,8 +320,8 @@ window.endTurn = function (sr, sc, mv, moveDetails) {
         const [r, c] = key.split(",").map(Number);
         const p = window.board[r][c];
 
-        if (p && getType(p) === "x") {
-            const owner = getCol(p);
+        if (p && window.getType(p) === "x") {
+            const owner = window.getCol(p);
 
             if (owner === justFinishedPlayer) {
                 window.chimeraTracker[key]++;
@@ -327,7 +331,7 @@ window.endTurn = function (sr, sc, mv, moveDetails) {
                     window.board[r][c] = newType;
                     window.chimeraTracker[key] = 0;
 
-                    log(`ХИМЕРА на ${String.fromCharCode(97 + c)}${8 - r} сменила лояльность!`);
+                    window.log(`ХИМЕРА на ${String.fromCharCode(97 + c)}${8 - r} сменила лояльность!`);
                 }
             }
         } else {
@@ -361,23 +365,23 @@ window.endTurn = function (sr, sc, mv, moveDetails) {
 
     window.lastMoveData = moveDetails;
 
-    updateLossCounters();
-    updateUI();
-    render();
-    updateMoraleUI();
+    window.updateLossCounters();
+    window.updateUI();
+    window.render();
+    window.updateMoraleUI();
 
     if (window.aiEnabled && window.turn === window.aiColor) {
         setTimeout(() => {
             const before = window.lastMoveData;
-            makeAIMove();
+            window.makeAIMove();
             setTimeout(() => {
-                if (before === window.lastMoveData) checkGameState();
+                if (before === window.lastMoveData) window.checkGameState();
             }, 50);
         }, 150);
         return;
     }
 
-    checkGameState();
+    window.checkGameState();
 };
 
 
@@ -386,8 +390,11 @@ window.endTurn = function (sr, sc, mv, moveDetails) {
 // =========================================================
 
 window.consultGeminiLoyalty = function () {
-    const whiteLoss = parseInt(document.getElementById("loss-w").innerText);
-    const blackLoss = parseInt(document.getElementById("loss-b").innerText);
+    const lossWEl = document.getElementById("loss-w");
+    const lossBEl = document.getElementById("loss-b");
+
+    const whiteLoss = lossWEl ? parseInt(lossWEl.innerText) : 0;
+    const blackLoss = lossBEl ? parseInt(lossBEl.innerText) : 0;
 
     window.whiteMorale = Math.max(0, 10 - whiteLoss / 3);
     window.blackMorale = Math.max(0, 10 - blackLoss / 3);
@@ -395,9 +402,9 @@ window.consultGeminiLoyalty = function () {
     for (let r = 0; r < 8; r++)
         for (let c = 0; c < 8; c++) {
             const p = window.board[r][c];
-            if (!p || getType(p) !== "p") continue;
+            if (!p || window.getType(p) !== "p") continue;
 
-            const color = getCol(p);
+            const color = window.getCol(p);
             const morale = (color === "white") ? window.whiteMorale : window.blackMorale;
 
             if (morale > 3) continue;
@@ -414,21 +421,21 @@ window.consultGeminiLoyalty = function () {
 
             for (const [dr, dc] of dirs) {
                 const rr = r + dr, cc = c + dc;
-                if (!onBd(rr, cc)) continue;
+                if (!window.onBd(rr, cc)) continue;
                 const piece = window.board[rr][cc];
-                if (piece && getCol(piece) !== color) enemyNearby = true;
+                if (piece && window.getCol(piece) !== color) enemyNearby = true;
             }
 
             if (!enemyNearby) continue;
 
             if (Math.random() < chance) {
                 window.board[r][c] = color === "white" ? "P" : "p";
-                log(`⚠ Пешка на (${r},${c}) изменила сторону!`);
+                window.log(`⚠ Пешка на (${r},${c}) изменила сторону!`);
             }
         }
 
-    updateMoraleUI();
-    render();
+    window.updateMoraleUI();
+    window.render();
 };
 
 
@@ -437,7 +444,6 @@ window.consultGeminiLoyalty = function () {
 // =========================================================
 
 window.activateNewMode = function () {
-
     const player = window.turn;
 
     if (player === "white") window.whiteRevived = true;
@@ -447,7 +453,8 @@ window.activateNewMode = function () {
     window.newModePlayer = player;
     window.kingDead = true;
 
-    document.getElementById("end-modal").classList.remove("active");
+    const endModal = document.getElementById("end-modal");
+    if (endModal) endModal.classList.remove("active");
 
     let legions = 0;
     let archons = 0;
@@ -455,15 +462,15 @@ window.activateNewMode = function () {
     for (let r = 0; r < 8; r++)
         for (let c = 0; c < 8; c++) {
             const p = window.board[r][c];
-            if (p && getCol(p) === player) {
-                if (["h", "x"].includes(getType(p))) legions++;
-                if (["a", "c"].includes(getType(p))) archons++;
+            if (p && window.getCol(p) === player) {
+                if (["h", "x"].includes(window.getType(p))) legions++;
+                if (["a", "c"].includes(window.getType(p))) archons++;
             }
         }
 
     for (let r = 0; r < 8; r++)
         for (let c = 0; c < 8; c++)
-            if (window.board[r][c] && getCol(window.board[r][c]) === player)
+            if (window.board[r][c] && window.getCol(window.board[r][c]) === player)
                 window.board[r][c] = null;
 
     const baseR = player === "white" ? 7 : 0;
@@ -479,13 +486,13 @@ window.activateNewMode = function () {
     for (let c = 0; c < 8; c++) {
         const p = window.board[baseR][c];
 
-        if (getType(p) === "n" && legions > 0) {
+        if (window.getType(p) === "n" && legions > 0) {
             window.board[baseR][c] = player === "white" ? "h" : "H";
             legions--;
         }
 
-        if (getType(p) === "r" && archons > 0) {
-            const isL = isLight(baseR, c);
+        if (window.getType(p) === "r" && archons > 0) {
+            const isL = window.isLight(baseR, c);
             window.board[baseR][c] = player === "white"
                 ? (isL ? "a" : "c")
                 : (isL ? "A" : "C");
@@ -496,36 +503,6 @@ window.activateNewMode = function () {
     window.board[baseR][4] = null;
     window.board[baseR][3] = player === "white" ? "z" : "Z";
 
-    log("НОВЫЙ РЕЖИМ! Король мертв. Ферзь установлен на трон.");
-    render();
-};
-
-
-// =========================================================
-// makeAIMove — временно здесь
-// =========================================================
-
-window.makeAIMove = function () {
-
-    let allMoves = [];
-
-    for (let r = 0; r < 8; r++)
-        for (let c = 0; c < 8; c++) {
-
-            const p = window.board[r][c];
-            if (!p) continue;
-            if (getCol(p) !== window.turn) continue;
-
-            const ms = getMoves(r, c, true);
-            for (let m of ms) allMoves.push({ r, c, mv: m });
-        }
-
-    if (allMoves.length === 0) {
-        checkGameState();
-        return;
-    }
-
-    const pick = allMoves[Math.floor(Math.random() * allMoves.length)];
-    window.selected = { r: pick.r, c: pick.c };
-    window.doMove(pick.mv);
+    window.log("НОВЫЙ РЕЖИМ! Король мертв. Ферзь установлен на трон.");
+    window.render();
 };
