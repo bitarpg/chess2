@@ -31,6 +31,10 @@ window.castling = {
     black: { k: true, l: true, r: true }
 };
 
+// ПУНКТ №8: Состояние выбора для атакующего
+window.choiceMade = false;
+window.pendingChoiceMove = null;
+
 
 // =========================================================
 // Включение / выключение ИИ
@@ -86,6 +90,9 @@ window.initGame = function () {
 
     document.getElementById("end-modal").classList.remove("active");
     document.getElementById("dip-modal").classList.remove("active");
+    // Скрываем окно выбора если оно было активно
+    const attackModal = document.getElementById("attacker-choice-modal");
+    if (attackModal) attackModal.classList.remove("active");
 
     render();
     updateUI();
@@ -141,6 +148,23 @@ window.doMove = function (mv) {
     const type = getType(p);
     const col = getCol(p);
 
+    // ПУНКТ №8: ПЕРЕХВАТ ДЛЯ ВЫБОРА АТАКИ
+    // Если конь атакует вражеского коня и выбор еще не сделан
+    if (type === "n" && mv.prop === "chimera" && !window.choiceMade) {
+        // В онлайне окно выбора видит только тот, чей сейчас ход
+        if (window.isOnlineActive() && window.getOnlineColor() !== window.turn) return;
+
+        window.pendingChoiceMove = mv;
+        const modal = document.getElementById("attacker-choice-modal");
+        if (modal) {
+            modal.classList.add("active");
+            log("ВСТРЕЧА ВСАДНИКОВ: Выберите действие...");
+            return;
+        }
+    }
+    // Сбрасываем флаг для следующего хода
+    window.choiceMade = false;
+
     const moveDetails = {
         from: start,
         to: mv,
@@ -156,13 +180,6 @@ window.doMove = function (mv) {
         render();
         return;
     }
-
-    // ЛОКАЛЬНЫЙ СОЮЗ
-    //if (mv.prop) {
-    //    window.pendingMove = mv;
-    //    document.getElementById("dip-modal").classList.add("active");
-    //    return;
-    //}
 
     const targetKey = `${mv.r},${mv.c}`;
     if (window.chimeraTracker[targetKey] !== undefined)
@@ -261,6 +278,25 @@ window.doMove = function (mv) {
     }
 
     window.endTurn(start.r, start.c, mv, moveDetails);
+};
+
+// ПУНКТ №8: ОБРАБОТКА ВЫБОРА АТАКУЮЩЕГО
+window.resolveAttackerChoice = function (action) {
+    const mv = window.pendingChoiceMove;
+    if (!mv) return;
+
+    document.getElementById("attacker-choice-modal").classList.remove("active");
+    window.choiceMade = true;
+
+    if (action === 'attack') {
+        log("ДИПЛОМАТИЯ: Вы выбрали атаку.");
+        mv.prop = null; // Убираем флаг химеры, делаем обычный ход
+        window.doMove(mv);
+    } else {
+        log("ДИПЛОМАТИЯ: Вы предложили союз.");
+        // Оставляем mv.prop === "chimera" и запускаем doMove заново
+        window.doMove(mv);
+    }
 };
 
 

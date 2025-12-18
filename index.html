@@ -5,28 +5,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Chess 2.0 — Modular Edition</title>
 
-    <!-- Tailwind -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- FontAwesome -->
+    <!-- FontAwesome для иконок -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 
-    <!-- Socket.io -->
+    <!-- Socket.io для онлайна -->
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
-    <!-- CSS -->
+    <!-- Подключение стилей -->
     <link rel="stylesheet" href="./styles.css" />
     <link rel="stylesheet" href="./themes.css" />
 </head>
 
 <body class="flex flex-col md:flex-row h-screen">
-    <!-- SIDEBAR -->
+
+    <!-- ПАНЕЛЬ УПРАВЛЕНИЯ (SIDEBAR) -->
     <div class="w-full md:w-80 bg-[#020617] p-6 border-r border-[#1e293b] flex flex-col z-20 shadow-2xl overflow-y-auto">
         <h1 class="text-3xl font-bold title-font mb-1 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">
             ШАХМАТЫ 2.0
         </h1>
         <div class="text-xs text-gray-500 mb-6 font-mono">LAN / MODULAR EDITION</div>
 
+        <!-- ИГРОВАЯ СТАТИСТИКА -->
         <div class="stat-box">
             <div class="flex justify-between items-center mb-2">
                 <span class="text-xs text-gray-400">ХОД</span>
@@ -43,13 +45,14 @@
             <span>Мораль Черных: <span id="morale-b" class="text-emerald-400">10</span></span>
         </div>
 
-        <div class="stat-box">
+        <!-- ОНЛАЙН ПАНЕЛЬ -->
+        <div class="stat-box mt-4">
             <div id="online-status" class="text-[10px] text-gray-500 mb-2 font-bold">СЕТЬ: НЕ ПОДКЛЮЧЕНА</div>
 
             <div id="connection-panel" class="mb-4 pb-4 border-b border-gray-700">
-                <label class="text-[10px] text-gray-400 block mb-1">IP сервера (host:3000)</label>
-                <input id="server-ip" type="text" placeholder="26.123.45.67:3000" class="dark-input mb-2 text-xs">
-                <button id="btn-connect" class="btn btn-primary text-xs">Подключиться</button>
+                <label class="text-[10px] text-gray-400 block mb-1">IP сервера (авто-определение)</label>
+                <input id="server-ip" type="text" placeholder="location.origin" class="dark-input mb-2 text-xs" disabled>
+                <button id="btn-connect" class="btn btn-primary text-xs">Подключиться вручную</button>
             </div>
 
             <div id="lobby-panel" class="hidden">
@@ -59,7 +62,7 @@
                     <button id="btn-join" class="w-1/3 btn text-xs py-2 m-0">Войти</button>
                 </div>
                 <div class="border-t border-gray-700 pt-2">
-                    <div class="text-[10px] text-gray-400 mb-1">Доступные комнаты:</div>
+                    <div class="text-[10px] text-gray-400 mb-1">Свободные комнаты:</div>
                     <div id="room-list-container" class="max-h-[100px] overflow-y-auto"></div>
                 </div>
             </div>
@@ -70,7 +73,8 @@
             </div>
         </div>
 
-        <div class="stat-box text-xs">
+        <!-- ПОТЕРИ -->
+        <div class="stat-box text-xs mt-4">
             <div class="flex justify-between mb-1">
                 <span class="text-gray-400">Потери Белых</span>
                 <span id="loss-w" class="text-red-400 font-bold text-lg">0</span>
@@ -81,45 +85,65 @@
             </div>
         </div>
 
-        <div id="log" class="flex-1 bg-black p-3 font-mono text-[10px] text-green-500 overflow-y-auto border border-gray-800 rounded leading-relaxed">
-            <div>> Система готова.</div>
+        <!-- ЛОГ ИГРЫ -->
+        <div id="log" class="flex-1 bg-black p-3 font-mono text-[10px] text-green-500 overflow-y-auto border border-gray-800 rounded leading-relaxed mt-4">
+            <div>> Инициализация системы...</div>
         </div>
-        <button id="btn-reload" class="btn mt-4 bg-slate-800">Перезагрузка</button>
-        <button id="btn-ai" class="btn bg-purple-700 mt-2">ИГРАТЬ С ИИ</button>
+
+        <!-- КНОПКИ УПРАВЛЕНИЯ -->
+        <button id="btn-reload" class="btn mt-4 bg-slate-800">Перезагрузить</button>
+        <button id="btn-ai" class="btn bg-purple-700 mt-2 uppercase">Играть с ИИ</button>
     </div>
-    <!-- BOARD -->
-    <div class="flex-1 flex items-center justify-center p-4 relative overflow-hidden">
+
+    <!-- ИГРОВОЕ ПОЛЕ -->
+    <div class="flex-1 flex items-center justify-center p-4 relative overflow-hidden bg-slate-950">
         <div id="board" class="board-wrapper shadow-2xl relative z-10">
             <div id="cells-container" class="absolute inset-0 grid grid-cols-8 grid-rows-8"></div>
             <svg id="svg-overlay" class="absolute inset-0 pointer-events-none" width="100%" height="100%" style="z-index: 30;"></svg>
         </div>
     </div>
-    <!-- END MODAL -->
+
+    <!-- МОДАЛЬНОЕ ОКНО ЗАВЕРШЕНИЯ ИГРЫ -->
     <div id="end-modal" class="modal">
         <div class="bg-gray-900 p-8 border border-gray-700 text-center rounded-xl shadow-2xl max-w-md w-full">
             <h2 id="end-title" class="text-4xl title-font font-bold mb-6">МАТ</h2>
-            <p id="end-desc" class="text-gray-400 text-sm mb-6">Игра окончена.</p>
+            <p id="end-desc" class="text-gray-400 text-sm mb-6">Король пал. Продолжить сопротивление?</p>
             <div id="end-buttons" class="flex flex-col gap-3">
                 <button id="btn-new-mode" class="btn btn-primary py-4 text-lg shadow-lg shadow-blue-900/50">ВОСКРЕСИТЬ АРМИЮ</button>
-                <button id="btn-restart" class="btn">Новая Игра</button>
+                <button id="btn-restart" class="btn">Новая Партия</button>
             </div>
-            <div id="winner-wait-msg" class="hidden text-emerald-400 font-mono animate-pulse">ОЖИДАНИЕ...</div>
+            <div id="winner-wait-msg" class="hidden text-emerald-400 font-mono animate-pulse">ОЖИДАНИЕ ХОДА СОПЕРНИКА...</div>
         </div>
     </div>
-    <!-- DIP MODAL -->
+
+    <!-- МОДАЛЬНОЕ ОКНО ДИПЛОМАТИИ (ХИМЕРА) -->
     <div id="dip-modal" class="modal">
         <div class="bg-slate-800 p-6 border-2 border-purple-500 text-center rounded-xl shadow-xl max-w-sm">
             <h3 class="text-2xl font-bold text-purple-400 mb-2">ПРЕДЛОЖЕНИЕ СОЮЗА</h3>
             <p class="text-gray-300 text-sm mb-6">
-                Вражеский конь предлагает создать Химеру.<br>
-                <span class="text-red-400 font-bold">Отказ приведёт к битве.</span>
+                Вражеский всадник предлагает перемирие.<br>
+                <span class="text-red-400 font-bold">Отказ приведет к немедленной атаке.</span>
             </p>
             <div class="flex gap-4">
                 <button id="btn-accept" class="btn bg-purple-600">ПРИНЯТЬ</button>
-                <button id="btn-decline" class="btn bg-red-600">ОТКАЗАТЬ</button>
+                <button id="btn-decline" class="btn bg-red-600">ОТКЛОНИТЬ</button>
             </div>
         </div>
     </div>
+
+    <!-- ПУНКТ №8: ОКНО ВЫБОРА ДЛЯ АТАКУЮЩЕГО -->
+    <div id="attacker-choice-modal" class="modal">
+        <div class="bg-slate-800 p-6 border-2 border-blue-500 text-center rounded-xl shadow-xl max-w-sm">
+            <h3 class="text-xl font-bold text-white mb-4">ВСТРЕЧА ВСАДНИКОВ</h3>
+            <p class="text-gray-300 text-sm mb-6">Вы хотите уничтожить вражеского коня или предложить ему союз для создания Химеры?</p>
+            <div class="flex flex-col gap-3">
+                <button onclick="window.resolveAttackerChoice('attack')" class="btn bg-red-600">АТАКОВАТЬ (СРУБИТЬ)</button>
+                <button onclick="window.resolveAttackerChoice('propose')" class="btn bg-purple-600">ПРЕДЛОЖИТЬ СОЮЗ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- СЛОВАРЬ ФИГУР -->
     <script>
         window.GP = {
             k: '♔', q: '♕', r: '♖', b: '♗', n: '♘', p: '♙',
@@ -127,31 +151,33 @@
             K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞', P: '♟',
             A: '♜', C: '♜', H: '♘', X: '♘', Z: '♛'
         };
-        
-
     </script>
-    <!-- SCRIPT MODULES (ПРАВИЛЬНЫЙ ПОРЯДОК) -->
+
+    <!-- МОДУЛИ СКРИПТОВ (СТРОГИЙ ПОРЯДОК ЗАГРУЗКИ) -->
     <script src="./js/rules.js"></script>
     <script src="./js/engine.js"></script>
     <script src="./js/chimera.js"></script>
-
     <script src="./js/ai.js"></script>
     <script src="./js/online.js"></script>
     <script src="./js/render.js"></script>
     <script src="./js/ui.js"></script>
 
-
-    <script>
-        window.skipOnlineInit = true;
-    </script>
-
-
+    <!-- ИНИЦИАЛИЗАЦИЯ И АВТО-ПОДКЛЮЧЕНИЕ -->
     <script>
         window.onload = () => {
+            // Запуск игрового движка
             initGame();
             window.gameReady = true;
-        };
 
+            // ПУНКТ №7: Автоматическое подключение к серверу
+            // Делаем небольшую паузу для полной готовности всех JS модулей
+            setTimeout(() => {
+                if (window.connectToServer) {
+                    window.connectToServer();
+                    console.log("Система: Попытка автоматического сетевого рукопожатия...");
+                }
+            }, 800);
+        };
     </script>
 </body>
 </html>

@@ -7,7 +7,7 @@ window.gameReady = false;
 
 window.socket = null;
 window.currentRoomId = null;
-window.myOnlineColor = null;
+window.myOnlineColor = null; // 'white' или 'black'
 window.isConnected = false;
 
 
@@ -16,6 +16,7 @@ window.isConnected = false;
 // ======================================================
 
 window.connectToServer = function () {
+    // На Render или других хостингах используем текущий домен
     const serverUrl = window.location.origin;
 
     const btn = document.getElementById("btn-connect");
@@ -24,32 +25,40 @@ window.connectToServer = function () {
         btn.disabled = true;
     }
 
-    // автоматическое определение хоста
-    socket = io();
+    // Инициализация socket.io
+    window.socket = io(serverUrl);
 
-    socket.on("connect", () => {
-        isConnected = true;
+    window.socket.on("connect", () => {
+        window.isConnected = true;
 
         const os = document.getElementById("online-status");
-        os.innerText = "СЕРВЕР: ПОДКЛЮЧЕН";
-        os.classList.replace("text-gray-500", "text-emerald-400");
+        if (os) {
+            os.innerText = "СЕРВЕР: ПОДКЛЮЧЕН";
+            os.classList.remove("text-gray-500");
+            os.classList.add("text-emerald-400");
+        }
 
         if (btn) btn.innerText = "OK";
 
         const connPanel = document.getElementById("connection-panel");
         if (connPanel) connPanel.classList.add("hidden");
 
-        document.getElementById("lobby-panel").classList.remove("hidden");
+        const lobby = document.getElementById("lobby-panel");
+        if (lobby) lobby.classList.remove("hidden");
+
+        log("Успешное подключение к серверу.");
     });
 
-    socket.on("connect_error", (err) => {
-        console.log("Попытка подключения...", err);
+    window.socket.on("connect_error", (err) => {
+        console.error("Ошибка подключения:", err);
+        if (btn) {
+            btn.innerText = "Ошибка";
+            btn.disabled = false;
+        }
     });
 
     setupSocketListeners();
 };
-
-
 
 
 // ======================================================
@@ -57,26 +66,28 @@ window.connectToServer = function () {
 // ======================================================
 
 window.setupSocketListeners = function () {
+    if (!window.socket) return;
 
-    // список комнат
-    socket.on("room_list", rooms => {
+    // ПУНКТ №2: Список доступных комнат
+    window.socket.on("room_list", rooms => {
         const listEl = document.getElementById("room-list-container");
+        if (!listEl) return;
+
         listEl.innerHTML = "";
 
         if (rooms.length === 0) {
-            listEl.innerHTML =
-                '<div class="text-gray-500 text-[10px] italic">Нет доступных комнат</div>';
+            listEl.innerHTML = '<div class="text-gray-500 text-[10px] italic">Нет свободных комнат</div>';
             return;
         }
 
         rooms.forEach(room => {
             const roomBtn = document.createElement("button");
-            roomBtn.className =
-                "w-full text-left bg-slate-800 hover:bg-slate-700 border border-slate-600 p-2 mb-1 rounded text-xs flex justify-between items-center group transition-all";
+            roomBtn.className = "w-full text-left bg-slate-800 hover:bg-slate-700 border border-slate-600 p-2 mb-1 rounded text-xs flex justify-between items-center group transition-all";
 
             roomBtn.onclick = () => {
-                document.getElementById("room-input").value = room.id;
-                joinGame();
+                const input = document.getElementById("room-input");
+                if (input) input.value = room.id;
+                window.joinGame();
             };
 
             roomBtn.innerHTML = `
@@ -88,66 +99,74 @@ window.setupSocketListeners = function () {
         });
     });
 
-    socket.on("player_joined", data => {
-        log(`Игрок подключился! Комната: ${data.roomId}`);
-        document.getElementById("online-msg").innerText = "Соперник в игре!";
+    window.socket.on("player_joined", data => {
+        log(`Противник вошел в комнату: ${data.roomId}`);
+        const msg = document.getElementById("online-msg");
+        if (msg) msg.innerText = "Противник в игре! Начинаем...";
     });
 
-    socket.on("game_start", data => {
-        myOnlineColor = data.color;
-        currentRoomId = data.roomId;
-        moveCount = 0;
+    window.socket.on("game_start", data => {
+        window.myOnlineColor = data.color;
+        window.currentRoomId = data.roomId;
+        window.moveCount = 0;
 
+        // Синхронизируем состояние
         window.syncBoardFromOnline(data.board, data.turn, data.castling);
-        enterOnlineMode(
-            data.roomId,
-            `Вы играете за: ${myOnlineColor === 'white' ? 'БЕЛЫХ' : 'ЧЕРНЫХ'}`
-        );
 
-        log(`Игра началась! Ваш цвет: ${myOnlineColor.toUpperCase()}`);
-    });
-
-    socket.on("receive_move", data => {
-
-        if (typeof data.moveCount !== "undefined") {
-            moveCount = data.moveCount;
+        // ПУНКТ №3: Переворот доски для черного игрока
+        if (window.setBoardFlip) {
+            window.setBoardFlip(window.myOnlineColor === 'black');
         }
 
-        if (data.mode && gameMode !== data.mode) {
-            gameMode = data.mode;
+        enterOnlineMode(
+            data.roomId,
+            `Цвет: ${window.myOnlineColor === 'white' ? 'БЕЛЫЕ' : 'ЧЕРНЫЕ'}`
+        );
+
+        log(`Битва началась! Вы играете за ${window.myOnlineColor === 'white' ? 'БЕЛЫХ' : 'ЧЕРНЫХ'}`);
+    });
+
+    window.socket.on("receive_move", data => {
+        if (typeof data.moveCount !== "undefined") {
+            window.moveCount = data.moveCount;
+        }
+
+        // Синхронизация режима (например, Воскрешение)
+        if (data.mode && window.gameMode !== data.mode) {
+            window.gameMode = data.mode;
             if (data.mode === "new_mode") {
-                kingDead = true;
-                newModePlayer = data.turn;
+                window.kingDead = true;
+                window.newModePlayer = data.newModePlayer || data.turn;
             }
         }
 
-        document.getElementById("dip-modal").classList.remove("active");
-
+        // ПУНКТ №4: Обработка предложения союза (Химера) в онлайне
         if (data.lastMove && data.lastMove.proposal) {
-            if (myOnlineColor && myOnlineColor === data.turn) {
-                // Если ход наш (мы отправители), просто ждем
-                log("Ожидание ответа соперника на союз...");
-            } else {
-                // Если мы получатели предложения:
-
-                // 1. Сохраняем ПОЛНЫЕ данные хода (from и to)
+            // Если ход не наш — показываем окно дипломатии
+            if (window.myOnlineColor !== data.turn) {
                 window.pendingMove = {
                     from: data.lastMove.from,
                     to: data.lastMove.to,
-                    attackerColor: getCol(data.board[data.lastMove.to.r][data.lastMove.to.c])
+                    attackerColor: window.getCol(data.board[data.lastMove.to.r][data.lastMove.to.c])
                 };
 
-                // 2. Подсвечиваем фигуру для наглядности
+                // Подсвечиваем фигуру агрессора для наглядности
                 window.selected = data.lastMove.from;
 
-                // 3. ОБЯЗАТЕЛЬНО перерисовываем доску, чтобы видеть предложение
-                render();
-
+                window.render();
                 document.getElementById("dip-modal").classList.add("active");
                 log("ПОЛУЧЕНО ПРЕДЛОЖЕНИЕ СОЮЗА!");
+            } else {
+                log("Предложение союза передано оппоненту...");
+                // Очищаем выделение у отправителя, чтобы не мешало
+                window.selected = null;
+                window.moves = [];
+                window.render();
             }
         }
         else {
+            // Обычный ход — полная синхронизация
+            document.getElementById("dip-modal").classList.remove("active");
 
             window.syncBoardFromOnline(
                 data.board,
@@ -156,25 +175,21 @@ window.setupSocketListeners = function () {
                 data.chimeraTracker
             );
 
-            lastMoveData = data.lastMove || null;
+            window.lastMoveData = data.lastMove || null;
 
-            if (!window.gameReady) {
-                console.warn("render() skipped — game not ready yet");
-                return;
-            }
-
-            render();
-            updateUI();
-            checkGameState();
-
+            window.render();
+            window.updateUI();
+            window.checkGameState();
         }
     });
 
-    socket.on("error_msg", msg => alert(msg));
+    window.socket.on("error_msg", msg => {
+        log(`Ошибка: ${msg}`);
+    });
 
-    socket.on("opponent_left", () => {
-        alert("Соперник отключился.");
-        location.reload();
+    window.socket.on("opponent_left", () => {
+        log("ВНИМАНИЕ: Соперник покинул игру.");
+        setTimeout(() => location.reload(), 3000);
     });
 };
 
@@ -184,30 +199,38 @@ window.setupSocketListeners = function () {
 // ======================================================
 
 window.hostGame = function () {
-    if (!isConnected) return alert("Сначала подключитесь к серверу!");
+    if (!window.isConnected) return log("Ошибка: Нет связи с сервером.");
     const roomId = Math.random().toString(36).substring(2, 7).toUpperCase();
-    socket.emit("create_room", roomId);
+    window.socket.emit("create_room", roomId);
     enterOnlineMode(roomId, "Ожидание соперника...");
 };
 
 window.joinGame = function () {
-    if (!isConnected) return alert("Сначала подключитесь к серверу!");
-    const roomId = document.getElementById("room-input").value.toUpperCase();
-    if (!roomId) return alert("Введите ID комнаты");
-    socket.emit("join_room", roomId);
+    if (!window.isConnected) return log("Ошибка: Нет связи с сервером.");
+    const input = document.getElementById("room-input");
+    const roomId = input ? input.value.toUpperCase() : "";
+
+    if (!roomId) return log("Ошибка: Введите ID комнаты.");
+    window.socket.emit("join_room", roomId);
 };
 
 window.enterOnlineMode = function (id, status) {
-    document.getElementById("lobby-panel").classList.add("hidden");
-    document.getElementById("online-active-ui").classList.remove("hidden");
+    const lobby = document.getElementById("lobby-panel");
+    const activeUI = document.getElementById("online-active-ui");
 
-    document.getElementById("room-display").innerText = id;
-    document.getElementById("online-msg").innerText = status;
+    if (lobby) lobby.classList.add("hidden");
+    if (activeUI) activeUI.classList.remove("hidden");
+
+    const rd = document.getElementById("room-display");
+    const om = document.getElementById("online-msg");
+
+    if (rd) rd.innerText = id;
+    if (om) om.innerText = status;
 };
 
 
 // ======================================================
-// ОТПРАВКА ХОДА В СЕТЬ
+// ОТПРАВКА ДАННЫХ В СЕТЬ
 // ======================================================
 
 window.sendMoveToCloud = function (
@@ -218,27 +241,28 @@ window.sendMoveToCloud = function (
     modeState,
     mCount
 ) {
-    if (!socket || !currentRoomId) return;
+    if (!window.socket || !window.currentRoomId) return;
 
-    socket.emit("make_move", {
-        roomId: currentRoomId,
+    window.socket.emit("make_move", {
+        roomId: window.currentRoomId,
         board: boardState,
         turn: nextTurn,
         lastMove: moveDetails,
         castling: castlingState,
-        mode: modeState || gameMode,
+        mode: modeState || window.gameMode,
         moveCount: mCount,
-        chimeraTracker: chimeraTracker
+        chimeraTracker: window.chimeraTracker,
+        newModePlayer: window.newModePlayer
     });
 };
 
 
 // ======================================================
-// Геттеры
+// ГЕТТЕРЫ И СТАТУС
 // ======================================================
 
-window.getOnlineColor = () => myOnlineColor;
+window.getOnlineColor = () => window.myOnlineColor;
+
 window.isOnlineActive = function () {
     return window.isConnected === true && window.currentRoomId !== null;
 };
-

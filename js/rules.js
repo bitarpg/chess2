@@ -17,11 +17,11 @@ window.isAttacked = function (r, c, attackerCol) {
     const myCol = attackerCol === "white" ? "black" : "white";
     const oldVal = tempBoard[r][c];
 
+    // Временно ставим короля, чтобы проверить шах
     tempBoard[r][c] = (myCol === "white" ? "k" : "K");
     const check = window.inCheck(myCol, tempBoard);
 
     tempBoard[r][c] = oldVal;
-
     return check;
 };
 
@@ -241,11 +241,11 @@ window.inCheck = function (col, bd) {
 
     // МАЛЫЕ КОНЁ
     const knightSmall = [
-        [2,1],[2,-1],[-2,1],[-2,-1],
-        [1,2],[1,-2],[-1,2],[-1,-2]
+        [2, 1], [2, -1], [-2, 1], [-2, -1],
+        [1, 2], [1, -2], [-1, 2], [-1, -2]
     ];
 
-    for (let [dr,dc] of knightSmall) {
+    for (let [dr, dc] of knightSmall) {
         const rr = kr + dr, cc = kc + dc;
         if (!onBd(rr, cc)) continue;
         const p = bd[rr][cc];
@@ -254,11 +254,11 @@ window.inCheck = function (col, bd) {
 
     // БОЛЬШИЕ КОНЁ (ЛЕГИОН)
     const knightLarge = [
-        [4,1],[4,-1],[-4,1],[-4,-1],
-        [1,4],[1,-4],[-1,4],[-1,-4]
+        [4, 1], [4, -1], [-4, 1], [-4, -1],
+        [1, 4], [1, -4], [-1, 4], [-1, -4]
     ];
 
-    for (let [dr,dc] of knightLarge) {
+    for (let [dr, dc] of knightLarge) {
         const rr = kr + dr, cc = kc + dc;
         if (!onBd(rr, cc)) continue;
         const p = bd[rr][cc];
@@ -266,7 +266,7 @@ window.inCheck = function (col, bd) {
     }
 
     // ХИМЕРА (оба типа ходов)
-    for (let [dr,dc] of [...knightSmall, ...knightLarge]) {
+    for (let [dr, dc] of [...knightSmall, ...knightLarge]) {
         const rr = kr + dr, cc = kc + dc;
         if (!onBd(rr, cc)) continue;
         const p = bd[rr][cc];
@@ -274,15 +274,15 @@ window.inCheck = function (col, bd) {
     }
 
     // ЛАДЬИ / ФЕРЗЬ / АРХОНТЫ / Z — прямые линии
-    const rookDirs = [[1,0],[-1,0],[0,1],[0,-1]];
-    for (let [dr,dc] of rookDirs) {
+    const rookDirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    for (let [dr, dc] of rookDirs) {
         let rr = kr + dr, cc = kc + dc;
         while (onBd(rr, cc)) {
             const p = bd[rr][cc];
             if (p) {
                 if (getCol(p) === opp) {
                     let t = getType(p);
-                    if (["r","q","z","a","c"].includes(t)) return true;
+                    if (["r", "q", "z", "a", "c"].includes(t)) return true;
                 }
                 break;
             }
@@ -291,8 +291,8 @@ window.inCheck = function (col, bd) {
     }
 
     // ДИАГОНАЛИ
-    const diag = [[1,1],[1,-1],[-1,1],[-1,-1]];
-    for (let [dr,dc] of diag) {
+    const diag = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
+    for (let [dr, dc] of diag) {
         let rr = kr + dr, cc = kc + dc;
         while (onBd(rr, cc)) {
             const p = bd[rr][cc];
@@ -310,8 +310,8 @@ window.inCheck = function (col, bd) {
     }
 
     // КОРОЛЬ
-    for (let dr of [-1,0,1])
-        for (let dc of [-1,0,1]) {
+    for (let dr of [-1, 0, 1])
+        for (let dc of [-1, 0, 1]) {
             if (dr === 0 && dc === 0) continue;
             const rr = kr + dr, cc = kc + dc;
             if (!onBd(rr, cc)) continue;
@@ -329,10 +329,12 @@ window.inCheck = function (col, bd) {
 window.checkGameState = function () {
     let hasMoves = false;
 
+    // Считаем ВСЕ возможные ходы
     for (let r = 0; r < 8; r++)
         for (let c = 0; c < 8; c++)
             if (window.board[r][c] && getCol(window.board[r][c]) === window.turn) {
-                const ms = getMoves(r, c, true).filter(m => !m.fuse && !m.merge && !m.prop);
+                // ИСПРАВЛЕНИЕ: Убрали фильтрацию спец-ходов, чтобы в спец-режиме они считались за ходы
+                const ms = getMoves(r, c, true);
                 if (ms.length > 0) hasMoves = true;
             }
 
@@ -345,6 +347,7 @@ window.checkGameState = function () {
         document.getElementById("end-desc").innerText = "Король пал. Возродить армию?";
 
         const btnMode = document.getElementById("btn-new-mode");
+        // ПУНКТ №5: Кнопка воскрешения только если еще не использовали
         btnMode.style.display = window.turn === "white"
             ? (window.whiteRevived ? "none" : "inline-flex")
             : (window.blackRevived ? "none" : "inline-flex");
@@ -412,6 +415,8 @@ window.checkLoyaltyLocal = function (wLoss, bLoss) {
             }
         }
 };
+
+
 // ===============================
 // ПРОВЕРКА ДЛЯ ПОДСВЕТКИ ШАХА
 // ===============================

@@ -1,5 +1,5 @@
 // ===============================
-// РЕНДЕР ДОСКИ
+// РЕНДЕР ДОСКИ (Chess 2.0)
 // ===============================
 
 window.render = function () {
@@ -11,11 +11,11 @@ window.render = function () {
         return;
     }
 
-    // 1. Очищаем только клетки, не трогая сам SVG элемент
+    // 1. Очищаем только клетки
     const oldCells = boardEl.querySelectorAll('.cell');
     oldCells.forEach(c => c.remove());
 
-    // 2. Очищаем содержимое SVG (линии хода)
+    // 2. Очищаем содержимое SVG
     svg.innerHTML = "";
 
     // 3. Отрисовка клеток и фигур
@@ -24,42 +24,43 @@ window.render = function () {
             const cell = document.createElement("div");
             cell.className = "cell " + ((r + c) % 2 === 0 ? "light" : "dark");
 
-            // Обработка клика
             cell.onclick = () => window.clickCell(r, c);
 
-            // Подсветка выбранной клетки
             if (window.selected && window.selected.r === r && window.selected.c === c) {
                 cell.classList.add("selected");
             }
 
-            // Подсветка шаха (если функция есть)
             if (window.isCheckSquare && window.isCheckSquare(r, c)) {
                 cell.classList.add("check");
             }
 
-            // --- ОТРИСОВКА ФИГУРЫ ---
+            // --- ФИГУРЫ ---
             const p = window.board[r][c];
             if (p) {
                 const pc = document.createElement("div");
                 pc.className = "piece";
 
-                // Определяем цвет (регистр символа)
                 if (p === p.toUpperCase()) pc.classList.add("black");
                 else pc.classList.add("white");
 
-                // Добавляем спец-классы для уникальных типов
                 const type = p.toLowerCase();
-                if (type === "a" || type === "c") pc.classList.add("archon");
+
+                // ПУНКТ №6: Разные Канцлеры (Архонты)
+                if (type === "a" || type === "c") {
+                    pc.classList.add("archon");
+                    // Добавляем специфический класс в зависимости от цвета клетки
+                    pc.classList.add((r + c) % 2 === 0 ? "archon-light" : "archon-dark");
+                }
+
                 if (type === "h") pc.classList.add("legion");
                 if (type === "x") pc.classList.add("chimera");
                 if (type === "z") pc.classList.add("heavy");
 
-                // Берем символ фигуры из глобального словаря GP
                 pc.innerText = window.GP[p] || '';
                 cell.appendChild(pc);
             }
 
-            // --- ОТРИСОВКА ПОДСКАЗОК (ХОДОВ) ---
+            // --- ПОДСКАЗКИ ---
             const mv = window.moves.find(m => m.r === r && m.c === c);
             if (mv) {
                 const hint = document.createElement("div");
@@ -79,7 +80,7 @@ window.render = function () {
         }
     }
 
-    // 4. Отрисовка SVG линии последнего хода
+    // 4. ПУНКТ №?: Фиолетовая неоновая линия хода
     if (window.lastMoveData && window.lastMoveData.from && window.lastMoveData.to) {
         const { from, to } = window.lastMoveData;
 
@@ -100,7 +101,7 @@ window.render = function () {
         line.setAttribute("y1", a.y);
         line.setAttribute("x2", b.x);
         line.setAttribute("y2", b.y);
-        line.setAttribute("stroke", "#d946ef");
+        line.setAttribute("stroke", "#d946ef"); // Фиолетовый
         line.setAttribute("stroke-width", "6");
         line.setAttribute("stroke-linecap", "round");
         line.classList.add("last-move-purple");
@@ -109,7 +110,6 @@ window.render = function () {
     }
 };
 
-// Прочие функции без изменений
 window.setBoardFlip = function (flip) {
     const boardEl = document.getElementById("board");
     if (boardEl) {
