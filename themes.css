@@ -8,15 +8,18 @@
     --red: #ef4444;
     --orange: #a3d4e8;
     --fiol: #1c7094;
-    --background: linear-gradient(180deg, #120038, #001526);
+    /* ГРАДИЕНТ: Сделал верхний цвет более ярким фиолетовым, чтобы он не казался черным */
+    --background: linear-gradient(180deg, #361964 0%, #080f2f 100%);
 }
 
 /* ГЛОБАЛЬНЫЕ СТИЛИ */
 body {
-    background: var(--background);
+    background: var(--background) ;
+    background-attachment: fixed ;
+    background-size: cover ;
     margin: 0;
     padding: 0;
-    /* ИСПРАВЛЕНИЕ: Разрешаем вертикальную прокрутку, чтобы на телефонах можно было дойти до доски */
+    /* Разрешаем вертикальную прокрутку для телефонов */
     overflow-y: auto !important;
     height: auto !important;
     min-height: 100vh;
@@ -77,7 +80,7 @@ body {
     filter: drop-shadow(0 0 10px #f43f5e);
 }
 
-/* ЦВЕТОВЫЕ ВАРИАЦИИ КАНЦЛЕРОВ (ПУНКТ №7) */
+/* ЦВЕТОВЫЕ ВАРИАЦИИ КАНЦЛЕРОВ (АРХОНТОВ) */
 .piece.archon-light {
     color: #f6d24a !important;
     text-shadow: 0 0 6px rgba(255,215,0,0.7);
@@ -96,13 +99,12 @@ body {
     background: rgba(0,0,0,0.9);
 }
 
-/* МОБИЛЬНАЯ АДАПТАЦИЯ (ПУНКТ №1) */
+/* МОБИЛЬНАЯ АДАПТАЦИЯ */
 @media (max-width: 768px) {
     body {
         flex-direction: column !important;
     }
 
-    /* Боковая панель теперь не занимает весь экран, давая место доске */
     .w-full.md\:w-80 {
         width: 100% !important;
         height: auto !important;
@@ -112,11 +114,10 @@ body {
         flex-shrink: 0;
     }
 
-    /* Контейнер доски подстраивается под ширину экрана */
     .flex-1 {
         padding: 10px 0 !important;
         width: 100% !important;
-        display: block !important; /* Убираем центрирование через flex, если оно мешает скроллу */
+        display: block !important;
     }
 
     .board-wrapper {

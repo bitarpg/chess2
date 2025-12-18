@@ -13,11 +13,17 @@
 }
 
 body {
-    background: linear-gradient(180deg, #120038, #001526);
+    /* Обновленный насыщенный градиент (как в старых версиях): глубокий индиго в иссиня-черный */
+    /* Используем !important, чтобы перебить настройки из themes.css */
+    
+    background-attachment: fixed ;
+    background-size: cover ;
     color: #e2e8f0;
     font-family: 'Roboto Mono', monospace;
     overflow: hidden;
     user-select: none;
+    margin: 0;
+    min-height: 100vh;
 }
 
 .title-font {
@@ -41,13 +47,13 @@ body {
     will-change: transform;
 }
 
-    .board-wrapper.flipped {
-        transform: rotate(180deg) translateZ(0);
-    }
+.board-wrapper.flipped {
+    transform: rotate(180deg) translateZ(0);
+}
 
-        .board-wrapper.flipped .cell {
-            transform: rotate(180deg) translateZ(0);
-        }
+.board-wrapper.flipped .cell {
+    transform: rotate(180deg) translateZ(0);
+}
 
 .cell {
     display: flex;
@@ -64,29 +70,29 @@ body {
     -webkit-font-smoothing: antialiased;
 }
 
-    /* ИСПРАВЛЕНИЕ ПОЛОС: box-shadow того же цвета, что и фон, закрывает щели в 0.5px */
-    .cell.light {
-        background: var(--orange);
-        color: #cbd5e0;
-        box-shadow: 0 0 0 0.6px var(--orange);
-    }
+/* ИСПРАВЛЕНИЕ ПОЛОС: box-shadow того же цвета, что и фон, закрывает щели в 0.5px */
+.cell.light {
+    background: var(--orange);
+    color: #cbd5e0;
+    box-shadow: 0 0 0 0.6px var(--orange);
+}
 
-    .cell.dark {
-        background: var(--fiol);
-        color: #94a3b8;
-        box-shadow: 0 0 0 0.6px var(--fiol);
-    }
+.cell.dark {
+    background: var(--fiol);
+    color: #94a3b8;
+    box-shadow: 0 0 0 0.6px var(--fiol);
+}
 
-    .cell.selected {
-        background: rgba(251, 191, 36, 0.3) !important;
-        /* Для выбранной клетки тень подстраиваем под цвет выделения */
-        box-shadow: inset 0 0 10px var(--gold), 0 0 0 0.6px rgba(251, 191, 36, 0.5);
-    }
+.cell.selected {
+    background: rgba(251, 191, 36, 0.3) !important;
+    /* Для выбранной клетки тень подстраиваем под цвет выделения */
+    box-shadow: inset 0 0 10px var(--gold), 0 0 0 0.6px rgba(251, 191, 36, 0.5);
+}
 
-    .cell.check {
-        background: rgba(239, 68, 68, 0.6) !important;
-        box-shadow: 0 0 0 0.6px rgba(239, 68, 68, 0.6);
-    }
+.cell.check {
+    background: rgba(239, 68, 68, 0.6) !important;
+    box-shadow: 0 0 0 0.6px rgba(239, 68, 68, 0.6);
+}
 
 .hint {
     position: absolute;
@@ -125,20 +131,20 @@ body {
     border-radius: 4px;
 }
 
-    .special-hint.castle {
-        border-color: rgb(255,146,3);
-        color: white;
-    }
+.special-hint.castle {
+    border-color: rgb(255,146,3);
+    color: white;
+}
 
-    .special-hint.fuse {
-        border-color: var(--gold);
-        color: var(--gold);
-    }
+.special-hint.fuse {
+    border-color: var(--gold);
+    color: var(--gold);
+}
 
-    .special-hint.union {
-        border-color: var(--purp);
-        color: var(--purp);
-    }
+.special-hint.union {
+    border-color: var(--purp);
+    color: var(--purp);
+}
 
 .piece {
     z-index: 10;
@@ -150,32 +156,32 @@ body {
     transform: translateZ(0);
 }
 
-    .piece.white {
-        color: #f8fafc;
-        text-shadow: -1px -1px 1px rgba(0,0,0,0.5), 1px -1px 1px rgba(0,0,0,0.5), -1px 1px 1px rgba(0,0,0,0.5), 1px 1px 1px rgba(0,0,0,0.5), 0px 0px 4px rgba(0,0,0,0.6);
-    }
+.piece.white {
+    color: #f8fafc;
+    text-shadow: -1px -1px 1px rgba(0,0,0,0.5), 1px -1px 1px rgba(0,0,0,0.5), -1px 1px 1px rgba(0,0,0,0.5), 1px 1px 1px rgba(0,0,0,0.5), 0px 0px 4px rgba(0,0,0,0.6);
+}
 
-    .piece.black {
-        color: #0a0a0a;
-        text-shadow: 0 0 2px white, 0 0 4px rgba(255,255,255,0.8), 0 0 6px rgba(0,0,0,0.5);
-    }
+.piece.black {
+    color: #0a0a0a;
+    text-shadow: 0 0 2px white, 0 0 4px rgba(255,255,255,0.8), 0 0 6px rgba(0,0,0,0.5);
+}
 
-    .piece.archon {
-        color: var(--gold) !important;
-        filter: drop-shadow(0 0 10px var(--gold));
-    }
+.piece.archon {
+    color: var(--gold) !important;
+    filter: drop-shadow(0 0 10px var(--gold));
+}
 
-    .piece.legion {
-        color: #ff7c00 !important;
-        text-shadow: -1px -1px 1px rgba(0,0,0,0.65), 1px -1px 1px rgba(0,0,0,0.65), -1px 1px 1px rgba(0,0,0,0.65), 1px 1px 1px rgba(0,0,0,0.65), 0 0 6px rgba(59,130,246,0.85), 0 0 10px rgba(59,130,246,0.55);
-        filter: none;
-    }
+.piece.legion {
+    color: #ff7c00 !important;
+    text-shadow: -1px -1px 1px rgba(0,0,0,0.65), 1px -1px 1px rgba(0,0,0,0.65), -1px 1px 1px rgba(0,0,0,0.65), 1px 1px 1px rgba(0,0,0,0.65), 0 0 6px rgba(59,130,246,0.85), 0 0 10px rgba(59,130,246,0.55);
+    filter: none;
+}
 
-    .piece.chimera {
-        color: var(--purp) !important;
-        filter: drop-shadow(0 0 10px var(--purp));
-        animation: pulse 2s infinite;
-    }
+.piece.chimera {
+    color: var(--purp) !important;
+    filter: drop-shadow(0 0 10px var(--purp));
+    animation: pulse 2s infinite;
+}
 
 @keyframes pulse {
     0%,100% {
@@ -216,10 +222,10 @@ body {
     font-size: 0.8rem;
 }
 
-    .btn:hover {
-        background: #334155;
-        border-color: white;
-    }
+.btn:hover {
+    background: #334155;
+    border-color: white;
+}
 
 .btn-primary {
     background: #1d4ed8;
@@ -242,9 +248,9 @@ body {
     backdrop-filter: blur(5px);
 }
 
-    .modal.active {
-        display: flex;
-    }
+.modal.active {
+    display: flex;
+}
 
 .stat-box {
     background: #1e293b;
