@@ -9,10 +9,11 @@ const { Server } = require("socket.io");
 // РАЗДАЧА СТАТИЧЕСКИХ ФАЙЛОВ
 // ==========================================
 
-// Обслуживание файлов из корня и папок (js, css)
+// Обслуживание файлов из корня и вложенных папок (js, css)
+// Это позволяет Render корректно отображать ваш index.html и подключать скрипты
 app.use(express.static(path.join(__dirname, './')));
 
-// Главный маршрут для загрузки игры
+// Главный маршрут: при заходе на домен отправляем index.html
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
@@ -28,15 +29,15 @@ const io = new Server(server, {
     }
 });
 
-// Render сам подставит PORT через окружение, 3000 - для локалки
+// На Render порт назначается динамически через process.env.PORT
 const PORT = process.env.PORT || 3000;
 
-// Хранилище игровых комнат
+// Глобальное хранилище игровых комнат
 let rooms = {};
 
 /**
- * Рассылает актуальный список доступных комнат всем подключенным игрокам.
- * Свободной считается комната, где ровно 1 игрок.
+ * Функция рассылки списка доступных комнат.
+ * Свободной считается комната, где ровно 1 участник.
  */
 function broadcastRoomList() {
     const list = [];
@@ -45,32 +46,39 @@ function broadcastRoomList() {
             list.push({ id: id, count: room.players.length });
         }
     }
+    // Отправляем всем подключенным клиентам
     io.emit('room_list', list);
 }
 
 io.on('connection', (socket) => {
-    console.log('Новый пользователь подключился:', socket.id);
+    console.log('Пользователь подключился к сокету:', socket.id);
 
-    // Сразу отправляем список комнат при входе
+    // Сразу при подключении отправляем актуальный список комнат
     broadcastRoomList();
 
-    // СОЗДАНИЕ КОМНАТЫ
+    // --- СОЗДАНИЕ НОВОЙ КОМНАТЫ ---
     socket.on('create_room', (roomId) => {
         if (rooms[roomId]) {
-            socket.emit('error_msg', 'Ошибка: Комната с таким ID уже существует!');
+            socket.emit('error_msg', 'Ошибка: Комната с таким ID уже занята!');
             return;
         }
 
+        // Инициализируем объект комнаты со всеми необходимыми полями для синхронизации
         rooms[roomId] = {
             players: [socket.id],
             board: null,
             turn: 'white',
             castling: null,
-            chimeraTracker: {}
+            chimeraTracker: {},
+            gameMode: 'classic',
+            newModePlayer: null,
+            whiteRevived: false,
+            blackRevived: false
         };
 
         socket.join(roomId);
 
+        // Отправляем создателю подтверждение и начальные данные
         socket.emit('game_start', {
             roomId: roomId,
             color: 'white',
@@ -78,30 +86,30 @@ io.on('connection', (socket) => {
             turn: 'white'
         });
 
-        console.log(`Игрок ${socket.id} создал комнату ${roomId}`);
-        broadcastRoomList();
+        console.log(`Комната #${roomId} создана игроком ${socket.id}`);
+        broadcastRoomList(); // Обновляем лобби для остальных
     });
 
-    // ВХОД В КОМНАТУ
+    // --- ВХОД В СУЩЕСТВУЮЩУЮ КОМНАТУ ---
     socket.on('join_room', (roomId) => {
         const room = rooms[roomId];
 
         if (!room) {
-            socket.emit('error_msg', 'Ошибка: Комната не найдена!');
+            socket.emit('error_msg', 'Ошибка: Комната не существует!');
             return;
         }
         if (room.players.length >= 2) {
-            socket.emit('error_msg', 'Ошибка: Комната уже заполнена!');
+            socket.emit('error_msg', 'Ошибка: В комнате уже двое игроков!');
             return;
         }
 
         room.players.push(socket.id);
         socket.join(roomId);
 
-        // Уведомляем первого игрока
+        // Уведомляем Хоста, что соперник зашел
         io.to(room.players[0]).emit('player_joined', { roomId });
 
-        // Отправляем данные второму игроку
+        // Отправляем Второму игроку (Черные) состояние игры
         socket.emit('game_start', {
             roomId: roomId,
             color: 'black',
@@ -109,22 +117,41 @@ io.on('connection', (socket) => {
             turn: room.turn
         });
 
-        console.log(`Игрок ${socket.id} вошел в комнату ${roomId}`);
-        broadcastRoomList();
+        console.log(`Игрок ${socket.id} присоединился к комнате #${roomId}`);
+        broadcastRoomList(); // Комната теперь полная, убираем из списка доступных
     });
 
-    // ПЕРЕДАЧА ХОДА
+    // --- ПЕРЕДАЧА И СИНХРОНИЗАЦИЯ ХОДА (ОБНОВЛЕНО ДЛЯ ПУНКТОВ 1-2) ---
     socket.on('make_move', (data) => {
-        const { roomId, board, turn, lastMove, castling, mode, moveCount, chimeraTracker } = data;
+        const {
+            roomId,
+            board,
+            turn,
+            lastMove,
+            castling,
+            mode,
+            moveCount,
+            chimeraTracker,
+            newModePlayer,
+            whiteRevived,
+            blackRevived
+        } = data;
+
         const room = rooms[roomId];
 
         if (room) {
+            // Сохраняем состояние на стороне сервера
             room.board = board;
             room.turn = turn;
             room.castling = castling;
             room.chimeraTracker = chimeraTracker;
+            room.gameMode = mode;
+            room.newModePlayer = newModePlayer;
+            room.whiteRevived = whiteRevived;
+            room.blackRevived = blackRevived;
 
-            // Транслируем ход всем участникам комнаты
+            // Транслируем ПОЛНЫЙ пакет данных всем участникам комнаты.
+            // Это гарантирует, что флаги Revived и newModePlayer будут идентичны у обоих.
             io.in(roomId).emit('receive_move', {
                 board: board,
                 turn: turn,
@@ -132,19 +159,25 @@ io.on('connection', (socket) => {
                 castling: castling,
                 mode: mode,
                 moveCount: moveCount,
-                chimeraTracker: chimeraTracker
+                chimeraTracker: chimeraTracker,
+                newModePlayer: newModePlayer,
+                whiteRevived: whiteRevived,
+                blackRevived: blackRevived
             });
-            console.log(`Ход в комнате ${roomId}. Очередь: ${turn}`);
+
+            console.log(`Синхронизация хода в комнате ${roomId}. Очередь: ${turn}. Режим: ${mode}`);
         }
     });
 
-    // ОТКЛЮЧЕНИЕ
+    // --- ОБРАБОТКА ВЫХОДА ---
     socket.on('disconnect', () => {
-        console.log('Пользователь отключился:', socket.id);
+        console.log('Пользователь покинул сеть:', socket.id);
         for (const id in rooms) {
             if (rooms[id].players.includes(socket.id)) {
+                // Уведомляем оппонента о техническом поражении игрока
                 socket.to(id).emit('opponent_left');
-                delete rooms[id]; // Удаляем комнату, если один из игроков вышел
+                // Удаляем комнату, чтобы освободить память и ID
+                delete rooms[id];
                 break;
             }
         }
@@ -153,11 +186,11 @@ io.on('connection', (socket) => {
 });
 
 /**
- * Стандартная расстановка фигур
+ * Вспомогательная функция для генерации стартовой позиции.
  */
 function getDefaultBoard() {
-    const r1 = ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'];
-    const R1 = ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R'];
+    const r1 = ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r']; // Белые фигуры (нижний регистр)
+    const R1 = ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R']; // Черные фигуры (верхний регистр)
     let b = [];
     for (let i = 0; i < 8; i++) {
         if (i === 0) b.push([...R1]);
@@ -169,6 +202,8 @@ function getDefaultBoard() {
     return b;
 }
 
+// Запуск сервера
 server.listen(PORT, () => {
-    console.log(`Сервер активен на порту ${PORT}`);
+    console.log(`[OK] Игровой сервер запущен на порту ${PORT}`);
+    console.log(`[LOG] Статические файлы обслуживаются из текущего каталога.`);
 });

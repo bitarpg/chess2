@@ -15,7 +15,7 @@ window.isConnected = false;
 // ======================================================
 
 window.connectToServer = function () {
-    // Используем window.location.origin для автоматического определения адреса сервера на Render
+    // На Render и других хостингах window.location.origin дает правильный адрес
     const serverUrl = window.location.origin;
 
     const btn = document.getElementById("btn-connect");
@@ -131,54 +131,51 @@ window.setupSocketListeners = function () {
         window.log(`Игра началась! Вы командуете ${window.myOnlineColor === 'white' ? 'белыми' : 'черными'} силами.`);
     });
 
-    // ПУНКТ №4: Обработка входящего хода или предложения (Дипломатия)
+    // ПЕРЕДАЧА ХОДА И СИНХРОНИЗАЦИЯ СОСТОЯНИЯ
     window.socket.on("receive_move", data => {
-        // Синхронизация общего счетчика ходов
+        // 1. Синхронизация общих счетчиков
         if (typeof data.moveCount !== "undefined") {
             window.moveCount = data.moveCount;
         }
 
-        // Синхронизация игрового режима (Воскрешение)
-        if (data.mode && window.gameMode !== data.mode) {
-            window.gameMode = data.mode;
-            if (data.mode === "new_mode") {
-                window.kingDead = true;
-                window.newModePlayer = data.newModePlayer || data.turn;
-                window.log("ВНИМАНИЕ: Противник возродил армию! Цель изменена.");
-            }
+        // 2. СИНХРОНИЗАЦИЯ РЕЖИМА И ФЛАГОВ ВОЗРОЖДЕНИЯ (Исправление рассинхрона)
+        // Эти флаги критически важны для предотвращения "Ложного мата"
+        if (data.mode) window.gameMode = data.mode;
+        if (data.whiteRevived !== undefined) window.whiteRevived = data.whiteRevived;
+        if (data.blackRevived !== undefined) window.blackRevived = data.blackRevived;
+
+        if (window.gameMode === "new_mode") {
+            window.kingDead = true;
+            window.newModePlayer = data.newModePlayer || window.newModePlayer;
+            window.log("Синхронизация: Активен НОВЫЙ РЕЖИМ (Воскрешение).");
         }
 
-        // ПРОВЕРКА НА ПРЕДЛОЖЕНИЕ СОЮЗА (ХИМЕРА)
+        // 3. ПРОВЕРКА НА ПРЕДЛОЖЕНИЕ СОЮЗА (ХИМЕРА)
         if (data.lastMove && data.lastMove.proposal) {
-            // Если предложение пришло НЕ от нас — показываем модальное окно
             if (window.myOnlineColor !== data.turn) {
                 window.pendingMove = {
                     from: data.lastMove.from,
                     to: data.lastMove.to,
                     attackerColor: window.getCol(data.board[data.lastMove.to.r][data.lastMove.to.c])
                 };
-
-                // Визуально подсвечиваем атакующую фигуру
                 window.selected = data.lastMove.from;
-
                 window.render();
                 const dipModal = document.getElementById("dip-modal");
                 if (dipModal) dipModal.classList.add("active");
-
-                window.log("ДИПЛОМАТИЯ: Получено предложение о создании Химеры!");
+                window.log("ДИПЛОМАТИЯ: Получено предложение союза!");
             } else {
-                window.log("Система: Предложение союза передано оппоненту.");
-                // Очищаем выделение у отправителя
+                window.log("Система: Ожидание ответа по дипломатии...");
                 window.selected = null;
                 window.moves = [];
                 window.render();
             }
         }
         else {
-            // ОБЫЧНЫЙ ХОД — полная синхронизация данных
+            // 4. ОБЫЧНЫЙ ХОД — полная синхронизация данных
             const dipModal = document.getElementById("dip-modal");
             if (dipModal) dipModal.classList.remove("active");
 
+            // Синхронизируем массив доски и состояние рокировок
             window.syncBoardFromOnline(
                 data.board,
                 data.turn,
@@ -188,12 +185,12 @@ window.setupSocketListeners = function () {
 
             window.lastMoveData = data.lastMove || null;
 
-            // Обновляем визуальную часть
+            // Обновляем визуальную часть и интерфейс
             window.render();
-            window.updateUI();
+            if (window.updateUI) window.updateUI();
 
-            // Проверяем состояние игры (мат/пат)
-            window.checkGameState();
+            // Проверяем состояние игры (мат/пат) с новыми данными
+            if (window.checkGameState) window.checkGameState();
         }
     });
 
@@ -204,7 +201,7 @@ window.setupSocketListeners = function () {
 
     // Выход соперника
     window.socket.on("opponent_left", () => {
-        window.log("ВНИМАНИЕ: Соперник покинул поле боя. Перезагрузка через 3 сек...");
+        window.log("ВНИМАНИЕ: Соперник покинул поле боя. Перезагрузка...");
         setTimeout(() => location.reload(), 3000);
     });
 };
@@ -215,7 +212,7 @@ window.setupSocketListeners = function () {
 // ======================================================
 
 window.hostGame = function () {
-    if (!window.isConnected) return window.log("Ошибка: Сначала подключитесь к серверу!");
+    if (!window.isConnected) return window.log("Ошибка: Нет связи с сервером!");
 
     const roomId = Math.random().toString(36).substring(2, 7).toUpperCase();
     window.socket.emit("create_room", roomId);
@@ -224,12 +221,12 @@ window.hostGame = function () {
 };
 
 window.joinGame = function () {
-    if (!window.isConnected) return window.log("Ошибка: Сначала подключитесь к серверу!");
+    if (!window.isConnected) return window.log("Ошибка: Нет связи с сервером!");
 
     const input = document.getElementById("room-input");
     const roomId = input ? input.value.toUpperCase() : "";
 
-    if (!roomId) return window.log("Ошибка: Введите ID комнаты для входа.");
+    if (!roomId) return window.log("Ошибка: Введите ID комнаты.");
 
     window.socket.emit("join_room", roomId);
 };
@@ -250,7 +247,7 @@ window.enterOnlineMode = function (id, status) {
 
 
 // ======================================================
-// ОТПРАВКА ХОДА В ОБЛАКО
+// ОТПРАВКА ХОДА В ОБЛАКО (ОБНОВЛЕНО: ПОЛНЫЙ ПАКЕТ ДАННЫХ)
 // ======================================================
 
 window.sendMoveToCloud = function (
@@ -263,6 +260,7 @@ window.sendMoveToCloud = function (
 ) {
     if (!window.socket || !window.currentRoomId) return;
 
+    // ОТПРАВЛЯЕМ ПОЛНЫЙ ПАКЕТ: чтобы у второго игрока движок работал по тем же правилам
     window.socket.emit("make_move", {
         roomId: window.currentRoomId,
         board: boardState,
@@ -272,7 +270,11 @@ window.sendMoveToCloud = function (
         mode: modeState || window.gameMode,
         moveCount: mCount,
         chimeraTracker: window.chimeraTracker,
-        newModePlayer: window.newModePlayer
+
+        // Флаги состояния (чтобы оппонент знал о воскрешении и смене цели мата)
+        newModePlayer: window.newModePlayer,
+        whiteRevived: window.whiteRevived,
+        blackRevived: window.blackRevived
     });
 };
 
