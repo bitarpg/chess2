@@ -47,6 +47,28 @@
             <span>Мораль Черных: <span id="morale-b" class="text-emerald-400">10</span></span>
         </div>
 
+        <!-- НАСТРОЙКИ ИИ -->
+        <div class="stat-box mt-4">
+            <div class="text-[10px] text-gray-400 mb-2 font-bold uppercase">Настройки ИИ</div>
+
+            <div class="mb-2">
+                <label class="text-[10px] text-gray-500 block mb-1">Сложность</label>
+                <select id="ai-difficulty"
+                    class="dark-input text-xs w-full bg-slate-900 border-slate-700 rounded p-1 text-white transition-colors hover:border-blue-500 focus:border-blue-500 outline-none">
+                    <option value="0">Новичок (800)</option>
+                    <option value="1">Любитель (1500)</option>
+                    <option value="2" selected>Профи (2200)</option>
+                    <option value="3">Гроссмейстер (3000)</option>
+                </select>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <input type="checkbox" id="ai-aggressive" class="accent-blue-500 w-3 h-3 cursor-pointer">
+                <label for="ai-aggressive" class="text-[10px] text-gray-300 cursor-pointer select-none">Агрессивный
+                    стиль (Шах!)</label>
+            </div>
+        </div>
+
         <!-- ОНЛАЙН ПАНЕЛЬ -->
         <div class="stat-box mt-4">
             <div id="online-status" class="text-[10px] text-gray-500 mb-2 font-bold">СЕТЬ: НЕ ПОДКЛЮЧЕНА</div>
