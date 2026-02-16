@@ -1,431 +1,186 @@
 // =====================================================
-// AI.JS — искусственный интеллект для Chess 2.0
+// AI.JS — Minimax AI for Chess 2.0
 // =====================================================
-// ------------------------------
-// ЦЕННОСТИ ФИГУР
-// ------------------------------
-const PIECE_VALUE = {
-    p: 1,   // пешка
-    n: 3,   // конь
-    b: 3,   // слон
-    r: 5,   // ладья
-    q: 10,  // ферзь
-    z: 200,
-    h: 6,   // легион (конь + конь)
-    a: 8,   // канцлер (ладья + слон, белопольный)
-    c: 8,   // канцлер (ладья + слон, чернопольный)
-    x: 3    // химера
-    // короля намеренно НЕ оцениваем
+
+const PIECE_VALUES = {
+    p: 10, n: 32, b: 33, r: 50, q: 90, k: 20000,
+    h: 35, x: 35, a: 35, c: 35, z: 20000
 };
-// ------------------------------
-// ОЦЕНКА МАТЕРИАЛА
-// ------------------------------
-function evaluateMaterial(board) {
-    let score = 0;
 
-    for (let r = 0; r < 8; r++) {
-        for (let c = 0; c < 8; c++) {
-            const p = board[r][c];
-            if (!p) continue;
+const MAX_DEPTH = 3;
 
-            const type = p.toLowerCase();
-            const val = PIECE_VALUE[type];
-            if (!val) continue;
-
-            // свои фигуры — плюс, чужие — минус
-            score += (getCol(p) === turn) ? val : -val;
+window.makeAIMove = function () {
+    try {
+        const bestMove = getBestMove(MAX_DEPTH);
+        if (bestMove) {
+            // Fix: AI always attacks, avoiding UI modals
+            if (bestMove.mv.prop) bestMove.mv.prop = null;
+            window.selected = { r: bestMove.r, c: bestMove.c };
+            window.doMove(bestMove.mv);
+        } else {
+            window.checkGameState();
         }
+    } catch (e) {
+        console.error("AI Error, falling back to random:", e);
+        makeRandomMove();
+    }
+};
+
+function makeRandomMove() {
+    const moves = getAllMoves(window.board, window.turn, window.castling);
+    if (moves.length > 0) {
+        const pick = moves[Math.floor(Math.random() * moves.length)];
+        if (pick.mv.prop) pick.mv.prop = null;
+        window.selected = { r: pick.r, c: pick.c };
+        window.doMove(pick.mv);
+    }
+}
+
+function getBestMove(depth) {
+    const moves = getAllMoves(window.board, window.turn, window.castling);
+    if (moves.length === 0) return null;
+
+    // Capture heuristic sort
+    moves.sort((a, b) => (b.mv.atk ? 1 : 0) - (a.mv.atk ? 1 : 0));
+
+    let bestMove = null;
+    let bestVal = -Infinity;
+    let alpha = -Infinity;
+    let beta = Infinity;
+
+    for (const move of moves) {
+        const simBoard = cloneBoard(window.board);
+        const simCastling = JSON.parse(JSON.stringify(window.castling));
+        applySimMove(simBoard, move.mv, move.r, move.c, simCastling);
+        
+        const val = minimax(simBoard, depth - 1, alpha, beta, false, window.turn, simCastling);
+        if (val > bestVal) {
+            bestVal = val;
+            bestMove = move;
+        }
+        alpha = Math.max(alpha, bestVal);
+    }
+    return bestMove || moves[0];
+}
+
+function minimax(bd, depth, alpha, beta, isMax, aiColor, cst) {
+    if (depth === 0) return evaluateBoard(bd, aiColor);
+
+    const turn = isMax ? aiColor : (aiColor === 'white' ? 'black' : 'white');
+    const moves = getAllMoves(bd, turn, cst);
+
+    if (moves.length === 0) {
+        // Safe checkmate detection
+        if (isCheckSafe(turn, bd)) return isMax ? -Infinity : Infinity;
+        return 0; // Stalemate
     }
 
+    if (isMax) {
+        let maxEval = -Infinity;
+        for (const move of moves) {
+            const newBd = cloneBoard(bd);
+            const newCst = JSON.parse(JSON.stringify(cst));
+            applySimMove(newBd, move.mv, move.r, move.c, newCst);
+            const ev = minimax(newBd, depth - 1, alpha, beta, false, aiColor, newCst);
+            maxEval = Math.max(maxEval, ev);
+            alpha = Math.max(alpha, ev);
+            if (beta <= alpha) break;
+        }
+        return maxEval;
+    } else {
+        let minEval = Infinity;
+        for (const move of moves) {
+            const newBd = cloneBoard(bd);
+            const newCst = JSON.parse(JSON.stringify(cst));
+            applySimMove(newBd, move.mv, move.r, move.c, newCst);
+            const ev = minimax(newBd, depth - 1, alpha, beta, true, aiColor, newCst);
+            minEval = Math.min(minEval, ev);
+            beta = Math.min(beta, ev);
+            if (beta <= alpha) break;
+        }
+        return minEval;
+    }
+}
+
+function evaluateBoard(bd, color) {
+    let score = 0;
+    for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+            const p = bd[r][c];
+            if (!p) continue;
+            const t = window.getType(p);
+            const cPiece = window.getCol(p);
+            let val = PIECE_VALUES[t] || 0;
+            
+            // Mobility/Center bonus
+            if (t === 'n' || t === 'h') val += (3 - Math.abs(r-3.5) - Math.abs(c-3.5)) * 2;
+            
+            score += (cPiece === color ? val : -val);
+        }
+    }
     return score;
 }
-// ------------------------------
-// ПРОВЕРКА: бьётся ли клетка фигурой противника
-// ------------------------------
-function isSquareAttacked(board, r, c, byColor) {
-    for (let rr = 0; rr < 8; rr++) {
-        for (let cc = 0; cc < 8; cc++) {
-            const p = board[rr][cc];
-            if (!p) continue;
-            if (getCol(p) !== byColor) continue;
-            const moves = withBoard(board, () => getMoves(rr, cc, false));
-            if (moves.some(m => m.r === r && m.c === c)) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-// ------------------------------
-// ПРОВЕРКА: защищена ли клетка своей фигурой
-// ------------------------------
-function isSquareDefended(board, r, c, byColor) {
-    return withBoard(board, () => {
-        for (let rr = 0; rr < 8; rr++) {
-            for (let cc = 0; cc < 8; cc++) {
-                const p = board[rr][cc];
-                if (!p) continue;
-                if (getCol(p) !== byColor) continue;
 
-                const moves = getMoves(rr, cc, false);
-                if (moves.some(m => m.r === r && m.c === c)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    });
-}
-
-// ------------------------------
-// ОЦЕНКА ПРОСТОГО РАЗМЕНА (SEE-lite)
-// ------------------------------
-function evaluateExchange(board, fromR, fromC, toR, toC) {
-    const attacker = board[fromR][fromC];
-    const target = board[toR][toC];
-
-    if (!attacker || !target) return 0;
-
-    const attackerType = attacker.toLowerCase();
-    const targetType = target.toLowerCase();
-
-    const attackerVal = PIECE_VALUE[attackerType] || 0;
-    const targetVal = PIECE_VALUE[targetType] || 0;
-
-    // если берём более ценную фигуру — хорошо
-    return targetVal - attackerVal;
-}
-
-// ------------------------------
-// МОГУТ ЛИ СЪЕСТЬ ФИГУРУ ПОСЛЕ ХОДА
-// ------------------------------
-function isRecapturePossible(board, r, c, byColor) {
-    for (let rr = 0; rr < 8; rr++) {
-        for (let cc = 0; cc < 8; cc++) {
-            const p = board[rr][cc];
-            if (!p) continue;
-            if (getCol(p) !== byColor) continue;
-
-            const moves = getMoves(rr, cc, false);
-            if (moves.some(m => m.r === r && m.c === c)) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-function withBoard(tempBoard, fn) {
-    const oldBoard = window.board;
-    window.board = tempBoard;
+function getAllMoves(bd, turn, cst) {
+    const all = [];
+    const realBd = window.board;
+    const realCst = window.castling;
+    window.board = bd;
+    window.castling = cst;
     try {
-        return fn();
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                if (bd[r][c] && window.getCol(bd[r][c]) === turn) {
+                    const ms = window.getMoves(r, c, true);
+                    for (const m of ms) {
+                        all.push({ r, c, mv: m });
+                    }
+                }
+            }
+        }
     } finally {
-        window.board = oldBoard;
+        window.board = realBd;
+        window.castling = realCst;
     }
+    return all;
 }
 
-function countAttackers(board, r, c, byColor) {
-    let minVal = Infinity;
-    let count = 0;
-
-    return withBoard(board, () => {
-        for (let rr = 0; rr < 8; rr++) {
-            for (let cc = 0; cc < 8; cc++) {
-                const p = board[rr][cc];
-                if (!p) continue;
-                if (getCol(p) !== byColor) continue;
-
-                const moves = getMoves(rr, cc, false);
-                if (moves.some(m => m.r === r && m.c === c)) {
-                    count++;
-                    const v = PIECE_VALUE[p.toLowerCase()] || 0;
-                    if (v < minVal) minVal = v;
-                }
-            }
-        }
-        return { count, minVal };
-    });
-}
-function findHangingPieces(board, color) {
-    let result = [];
-
-    for (let r = 0; r < 8; r++) {
-        for (let c = 0; c < 8; c++) {
-            const p = board[r][c];
-            if (!p) continue;
-            if (getCol(p) !== color) continue;
-
-            const enemy = color === "white" ? "black" : "white";
-
-            const attacked = isSquareAttacked(board, r, c, enemy);
-            const defended = isSquareDefended(board, r, c, color);
-
-            if (attacked) {
-                const pieceVal = PIECE_VALUE[p.toLowerCase()] || 0;
-
-                const attackers = countAttackers(board, r, c, enemy);
-                const defenders = countAttackers(board, r, c, color);
-
-                // угроза считается серьёзной, если:
-                // 1) атакующих больше
-                // 2) или самый дешёвый атакующий дешевле фигуры
-                if (
-                    attackers.count > defenders.count ||
-                    attackers.minVal < pieceVal
-                ) {
-                    result.push({ r, c, piece: p });
-                }
-            }
-        }
-    }
-
-    return result;
-}
-function findFreeCaptures(board, color) {
-    const enemy = color === "white" ? "black" : "white";
-    let captures = [];
-
-    for (let r = 0; r < 8; r++) {
-        for (let c = 0; c < 8; c++) {
-            const p = board[r][c];
-            if (!p || getCol(p) !== color) continue;
-
-            const moves = getMoves(r, c, true);
-            for (let mv of moves) {
-                const target = board[mv.r][mv.c];
-                if (!target) continue;
-
-                // если цель принадлежит врагу
-                if (getCol(target) !== enemy) continue;
-
-                const snap = board.map(row => [...row]);
-                snap[mv.r][mv.c] = snap[r][c];
-                snap[r][c] = null;
-
-                // если после взятия фигура НЕ под боем — это бесплатное взятие
-                if (!isSquareAttacked(snap, mv.r, mv.c, enemy)) {
-                    captures.push({ r, c, mv });
-                }
-            }
-        }
-    }
-
-    return captures;
+function isCheckSafe(turn, bd) {
+    const real = window.board;
+    window.board = bd;
+    try { return window.inCheck(turn, bd); } 
+    finally { window.board = real; }
 }
 
-// Функция, вызываемая движком, когда очередь ИИ
-window.makeAIMove = function () {
+function cloneBoard(bd) {
+    return bd.map(r => [...r]);
+}
 
-    // собираем все возможные ходы всех фигур ИИ
-    let allMoves = [];
-
-    for (let r = 0; r < 8; r++) {
-        for (let c = 0; c < 8; c++) {
-
-            const p = board[r][c];
-            if (!p) continue;
-
-            // фигура принадлежит ИИ?
-            if (getCol(p) !== turn) continue;
-
-            const ms = getMoves(r, c, true);
-            for (let mv of ms) {
-                allMoves.push({
-                    r,
-                    c,
-                    mv
-                });
-            }
-        }
+function applySimMove(bd, mv, r, c, cst) {
+    const p = bd[r][c];
+    bd[mv.r][mv.c] = p;
+    bd[r][c] = null;
+    
+    // Promotion
+    if (window.getType(p) === 'p' && (mv.r === 0 || mv.r === 7)) {
+        bd[mv.r][mv.c] = (window.getCol(p) === 'white') ? 'q' : 'Q';
     }
-
-    // Нет ходов → передаём движку проверку мата/пата
-    if (allMoves.length === 0) {
-        checkGameState();
-        return;
-    }
-    // ---------------------------------
-    // ПРИОРИТЕТ: БЕСПЛАТНОЕ ВЗЯТИЕ
-    // ---------------------------------
-    const freeCaptures = findFreeCaptures(board, turn);
-    if (freeCaptures.length > 0) {
-        const pick = freeCaptures[Math.floor(Math.random() * freeCaptures.length)];
-        selected = { r: pick.r, c: pick.c };
-        doMove(pick.mv);
-        return;
-    }
-    const originalMoves = allMoves.slice();
-
-    // ---------------------------------
-    // ПРИОРИТЕТ: РЕАКЦИЯ НА УГРОЗУ
-    // ---------------------------------
-    const threatened = findHangingPieces(board, turn);
-
-    if (threatened.length > 0) {
-        // оставляем только ходы, которые спасают хотя бы одну висящую фигуру
-        allMoves = allMoves.filter(m => {
-            for (const t of threatened) {
-                // 1. уходим этой фигурой
-                if (m.r === t.r && m.c === t.c) return true;
-
-                // 2. защищаем её
-                const snapshot = board.map(row => [...row]);
-                snapshot[m.mv.r][m.mv.c] = snapshot[m.r][m.c];
-                snapshot[m.r][m.c] = null;
-
-                if (isSquareDefended(snapshot, t.r, t.c, turn)) {
-                    return true;
-                }
-            }
-            return false;
-        });
-
-        // если фильтр всё выкинул — возвращаем все ходы (чтобы ИИ не завис)
-
-        if (allMoves.length === 0) {
-            allMoves = originalMoves;
-        }
-
-    }
-
-    // ЛЮБОЙ СЛУЧАЙНЫЙ ХОД — как в исходном коде
-    let bestScore = -Infinity;
-    let bestMoves = [];
-    let fallbackMoves = [];
-    for (let m of allMoves) {
-        let isBadTrade = false;
-
-        // виртуально делаем ход
-        const snapshot = board.map(row => [...row]);
-        snapshot[m.mv.r][m.mv.c] = snapshot[m.r][m.c];
-        snapshot[m.r][m.c] = null;
-
-        let score = evaluateMaterial(snapshot);
-
-        // ---------------------------------
-        // ШТРАФ ЗА ПОДСТАВЛЕННУЮ ФИГУРУ
-        // ---------------------------------
-        const movedPiece = snapshot[m.mv.r][m.mv.c];
-        if (movedPiece) {
-            const myColor = getCol(movedPiece);
-            const enemyColor = (myColor === "white") ? "black" : "white";
-
-            const attacked = isSquareAttacked(snapshot, m.mv.r, m.mv.c, enemyColor);
-            const defended = isSquareDefended(snapshot, m.mv.r, m.mv.c, myColor);
-            // ---------------------------------
-            // ЗАПРЕТ: проигранный размен по атаке/защите
-            // ---------------------------------
-            if (attacked) {
-                const attackerInfo = countAttackers(
-                    snapshot,
-                    m.mv.r,
-                    m.mv.c,
-                    enemyColor
-                );
-
-                const defenderInfo = countAttackers(
-                    snapshot,
-                    m.mv.r,
-                    m.mv.c,
-                    myColor
-                );
-
-                const pieceVal = PIECE_VALUE[movedPiece.toLowerCase()] || 0;
-
-                // если атакующих больше ИЛИ
-                // самый дешёвый атакующий дешевле нашей фигуры
-                if (
-                    attackerInfo.count > defenderInfo.count ||
-                    attackerInfo.minVal < pieceVal
-                ) {
-                    isBadTrade = true;
-                }
-            }
-
-            // ---------------------------------
-            // БАЗОВЫЙ ЗАПРЕТ ГЛУПОГО РАЗМЕНА
-            // (взял дешёвое, сам остался под боем)
-            // ---------------------------------
-            //const originalTarget = board[m.mv.r][m.mv.c];
-
-            //if (
-            //    originalTarget &&   // было взятие
-            //    attacked            // фигуру могут взять
-            //) {
-            //    const attackerVal = PIECE_VALUE[movedPiece.toLowerCase()] || 0;
-            //    const targetVal = PIECE_VALUE[originalTarget.toLowerCase()] || 0;
-
-            //    // менять более дорогую фигуру на дешёвую — запрет
-            //    if (attackerVal > targetVal) {
-            //        isBadTrade = true;
-            //    }
-            //}
-
-        }
-        // ---------------------------------
-        // ШТРАФ ЗА НЕВЫГОДНЫЙ РАЗМЕН
-        // ---------------------------------
-        const originalTarget = board[m.mv.r][m.mv.c];
-        
-        if (originalTarget) {
-            const exchangeScore = evaluateExchange(
-                board,
-                m.r, m.c,
-                m.mv.r, m.mv.c
-            );
-
-            const myColor = turn;
-            const enemyColor = (myColor === "white") ? "black" : "white";
-
-            // могут ли съесть фигуру в ответ
-            const recapture = isRecapturePossible(
-                snapshot,
-                m.mv.r,
-                m.mv.c,
-                enemyColor
-            );
-
-            // если размен плохой и есть ответное взятие — штрафуем
-            if (recapture && exchangeScore < 0) {
-                score += exchangeScore * 2;
-            }
-            
-
-        }
-
-
-        if (!isBadTrade) {
-            if (score > bestScore) {
-                bestScore = score;
-                bestMoves = [m];
-            } else if (score === bestScore) {
-                bestMoves.push(m);
-            }
+    // Castling
+    if (mv.castle) {
+        const row = mv.r;
+        if (mv.castle === 'short') {
+             bd[row][5] = bd[row][7]; bd[row][7] = null;
         } else {
-            // плохие размены — в запас
-            fallbackMoves.push(m);
+             bd[row][3] = bd[row][0]; bd[row][0] = null;
         }
-
     }
-    if (bestMoves.length === 0 && fallbackMoves.length === 0) {
-        fallbackMoves = allMoves;
+    // Legion Merge
+    if (mv.merge) {
+        bd[mv.r][mv.c] = (window.getCol(p) === 'white' ? 'h' : 'H');
     }
-    if (fallbackMoves.length === 0) {
-        fallbackMoves = allMoves;
+    // Archon Fuse
+    if (mv.fuse) {
+         const isL = (mv.r + mv.c) % 2 === 0;
+         bd[mv.r][mv.c] = (window.getCol(p) === 'white' ? (isL?'a':'c') : (isL?'A':'C'));
     }
-
-
-    // если несколько лучших — выбираем случайно
-    const source = bestMoves.length > 0 ? bestMoves : fallbackMoves;
-    const pick = source[Math.floor(Math.random() * source.length)];
-
-
-    // отмечаем выбранную фигуру
-    selected = { r: pick.r, c: pick.c };
-
-    // выполняем ход
-    const before = JSON.stringify(board);
-    doMove(pick.mv);
-    if (JSON.stringify(board) !== before) return;
-
-};
+}

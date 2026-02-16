@@ -65,8 +65,18 @@ window.initGame = function () {
 
     for (let i = 0; i < 8; i++) {
         if (i === 0) window.board.push([...R1]);
-        else if (i === 1) window.board.push(Array(8).fill("P"));
-        else if (i === 6) window.board.push(Array(8).fill("p"));
+        else if (i === 1) {
+            // Black Pawns with Origin
+            const row = [];
+            for (let k = 0; k < 8; k++) row.push({ type: 'P', origin: 'black' });
+            window.board.push(row);
+        }
+        else if (i === 6) {
+            // White Pawns with Origin
+            const row = [];
+            for (let k = 0; k < 8; k++) row.push({ type: 'p', origin: 'white' });
+            window.board.push(row);
+        }
         else if (i === 7) window.board.push([...r1]);
         else window.board.push(Array(8).fill(null));
     }
@@ -84,6 +94,7 @@ window.initGame = function () {
     window.newModePlayer = null;
     window.lastMoveData = null;
 
+    window.enPassant = null; // EP Target {r, c}
     window.castling = {
         white: { k: true, l: true, r: true },
         black: { k: true, l: true, r: true }
@@ -146,6 +157,10 @@ window.clickCell = function (r, c) {
 // =========================================================
 
 window.doMove = function (mv) {
+    // Сбрасываем EP каждый ход (если не будет двойного прыжка)
+    const prevEP = window.enPassant; // Сохраним, если нужно для отката (тут не нужно)
+    window.enPassant = null;
+
     const start = window.selected;
     if (!start) return;
 
@@ -267,21 +282,66 @@ window.doMove = function (mv) {
 
     // Обычный ход
     else {
+        // ВЗЯТИЕ НА ПРОХОДЕ
+        if (mv.ep) {
+            window.board[start.r][mv.c] = null;
+            window.log("EN PASSANT: Взятие на проходе!");
+        }
+
         window.board[mv.r][mv.c] = p;
         window.board[start.r][start.c] = null;
 
+        // Если пешка прыгнула на 2 клетки — ставим флаг EP
+        if (type === "p" && Math.abs(mv.r - start.r) === 2) {
+            window.enPassant = { r: (start.r + mv.r) / 2, c: start.c };
+        }
+
         if (type === "p" && (mv.r === 0 || mv.r === 7)) {
-            // ИСПРАВЛЕН БАГ: Теперь черная пешка в Новом режиме становится Q (черным ферзем)
-            if (window.gameMode === "new_mode") {
-                window.board[mv.r][mv.c] = window.turn === "white" ? "q" : "Q";
-                window.log("ПРОМОУШН: Создан Ферзь.");
-            } else {
-                window.board[mv.r][mv.c] = window.turn === "white" ? "q" : "Q";
-            }
+            // ПУНКТ 12: ПРОМОУШН ЧЕРЕЗ UI
+            window.pendingPromotion = {
+                r: mv.r,
+                c: mv.c,
+                origin: p.origin || window.turn, // Сохраняем Origin
+                moveDetails: moveDetails,
+                sr: start.r,
+                sc: start.c,
+                mv: mv
+            };
+
+            // Показываем модалку
+            const modal = document.getElementById("promotion-modal");
+            if (modal) modal.classList.add("active");
+
+            window.log("ПРОМОУШН: Ожидание выбора фигуры...");
+            return; // ПРЕРЫВАЕМ endTurn, ждем выбора игрока
         }
     }
 
     window.endTurn(start.r, start.c, mv, moveDetails);
+};
+
+// ОБРАБОТЧИК ВЫБОРА ПРОМОУШЕНА
+window.resolvePromotion = function (choice) {
+    const promo = window.pendingPromotion;
+    if (!promo) return;
+
+    // ВАЛИДАЦИЯ (z убрана)
+    const valid = ['q', 'r', 'b', 'n', 'h', 'x', 'a', 'c'];
+    if (!valid.includes(choice.toLowerCase())) choice = 'q';
+
+    const modal = document.getElementById("promotion-modal");
+    if (modal) modal.classList.remove("active");
+
+    const newType = (window.turn === "white") ? choice.toLowerCase() : choice.toUpperCase();
+
+    // Применяем превращение
+    window.board[promo.r][promo.c] = { type: newType, origin: promo.origin };
+
+    window.log("ПРОМОУШН: Пешка стала " + newType + " (Origin: " + promo.origin + ").");
+
+    // Завершаем ход
+    window.pendingPromotion = null;
+    window.endTurn(promo.sr, promo.sc, promo.mv, promo.moveDetails);
 };
 
 // ПУНКТ №9: ОБРАБОТКА ВЫБОРА АТАКУЮЩЕГО

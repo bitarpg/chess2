@@ -24,6 +24,8 @@ window.render = function () {
             const cell = document.createElement("div");
             // Определяем цвет клетки (белая/черная)
             cell.className = "cell " + ((r + c) % 2 === 0 ? "light" : "dark");
+            cell.dataset.r = r;
+            cell.dataset.c = c;
 
             // Назначаем обработчик клика
             cell.onclick = () => window.clickCell(r, c);
@@ -44,32 +46,30 @@ window.render = function () {
                 const pc = document.createElement("div");
                 pc.className = "piece";
 
-                // Определяем цвет (Верхний регистр = Черные, Нижний = Белые)
-                if (p === p.toUpperCase()) pc.classList.add("black");
-                else pc.classList.add("white");
+                // Определяем цвет и тип через хелперы (поддержка объектов)
+                const type = window.getType(p);
+                const col = window.getCol(p);
 
-                const type = p.toLowerCase();
+                pc.classList.add(col);
 
-                // ПУНКТ №3 ФИКС: РАЗНЫЕ КАНЦЛЕРЫ (АРХОНТЫ)
-                // Вид теперь зависит от символа (происхождения), а не от клетки
-                if (type === "a" || type === "c") {
-                    pc.classList.add("archon");
-
-                    // a/A — Белопольный (Золотой), c/C — Чернопольный (Фиолетовый)
-                    if (type === "a") {
-                        pc.classList.add("archon-light");
-                    } else {
-                        pc.classList.add("archon-dark");
-                    }
+                // Визуализация ПРЕДАТЕЛЯ (Traitor)
+                if (typeof p === 'object' && p.origin && p.origin !== col) {
+                    cell.classList.add('traitor');
                 }
 
-                // Стили для других спец-фигур
+                if (type === "a" || type === "c") {
+                    pc.classList.add("archon");
+                    // a/A — Белопольный (Золотой), c/C — Чернопольный (Фиолетовый)
+                    if (type === "a") pc.classList.add("archon-light");
+                    else pc.classList.add("archon-dark");
+                }
+
                 if (type === "h") pc.classList.add("legion");
                 if (type === "x") pc.classList.add("chimera");
                 if (type === "z") pc.classList.add("heavy");
 
-                // Вставляем символ фигуры из словаря GP
-                pc.innerText = window.GP[p] || '';
+                const pKey = (typeof p === 'object') ? p.type : p;
+                pc.innerText = window.GP[pKey] || '';
                 cell.appendChild(pc);
             }
 

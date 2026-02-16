@@ -6,8 +6,16 @@
  * Глобальные утилиты для работы с фигурами и доской.
  * Используем window, чтобы модули engine.js и render.js имели доступ.
  */
-window.getCol = p => p ? (p === p.toUpperCase() ? "black" : "white") : null;
-window.getType = p => p ? p.toLowerCase() : null;
+window.getCol = p => {
+    if (!p) return null;
+    if (typeof p === 'string') return (p === p.toUpperCase() ? "black" : "white");
+    return (p.type === p.type.toUpperCase() ? "black" : "white");
+};
+window.getType = p => {
+    if (!p) return null;
+    if (typeof p === 'string') return p.toLowerCase();
+    return p.type.toLowerCase();
+};
 window.onBd = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
 window.isLight = (r, c) => (r + c) % 2 === 0;
 
@@ -83,10 +91,18 @@ window.getMoves = function (r, c, safe = true) {
 
         // Взятие врага по диагонали
         [[d, 1], [d, -1]].forEach(([dr, dc]) => {
-            if (!onBd(r + dr, c + dc)) return;
-            const t = window.board[r + dr][c + dc];
+            const tr = r + dr, tc = c + dc;
+            if (!onBd(tr, tc)) return;
+
+            const t = window.board[tr][tc];
+
+            // Обычное взятие
             if (t && getCol(t) !== col) {
-                m.push({ r: r + dr, c: c + dc, atk: true });
+                m.push({ r: tr, c: tc, atk: true });
+            }
+            // Взятие на проходе (En Passant)
+            else if (window.enPassant && window.enPassant.r === tr && window.enPassant.c === tc) {
+                m.push({ r: tr, c: tc, atk: true, ep: true });
             }
         });
     }
@@ -284,19 +300,47 @@ window.inCheck = function (col, bd) {
     const opp = col === "white" ? "black" : "white";
 
     // 1. Атаки пешек
-    const pD = (opp === "white") ? 1 : -1;
+    const pD = (col === "white") ? -1 : 1;
+    // ВНИМАНИЕ: Если мы проверяем шах БЕЛОМУ королю, нас атакуют ЧЕРНЫЕ пешки.
+    // Черные пешки бьют "вниз" (+1), если смотреть с их стороны.
+    // Но мы смотрим ОТ КОРОЛЯ. Если Белый Король на r, то Черная пешка, бьющая его, должна быть на r-1 (выше).
+    // Точно?
+    // Черная пешка на (r-1, c+1) бьет (r, c).
+    // Значит мы ищем пешку на kr + (col=="white"? -1 : 1).
+    // Если col="white", то враг "black". Пешки врага идут ВНИЗ (r++).
+    // Чтобы ударить клетку (kr, kc), черная пешка должна быть на (kr-1, kc±1).
+    // Значит pD = -1 для белого короля (ищем выше).
+
+    // Но постойте, код был: const pD = (opp === "white") ? 1 : -1;
+    // Если col=white, opp=black. pD = -1. Ищем на kr-1. Звучит верно.
+
     for (let dc of [-1, 1]) {
-        let pr = kr + pD, pc = kc + dc;
-        if (onBd(pr, pc) && bd[pr][pc] && getCol(bd[pr][pc]) === opp && getType(bd[pr][pc]) === "p") return true;
+        const pr = kr + pD, pc = kc + dc;
+        if (onBd(pr, pc)) {
+            const p = bd[pr][pc];
+            if (p && getCol(p) === opp && getType(p) === "p") {
+                // ПРОВЕРКА ПРЕДАТЕЛЯ (TRAITOR)
+                // Если пешка имеет origin == col (цвет Короля), она не атакует.
+                if (typeof p === 'object' && p.origin === col) {
+                    continue;
+                }
+                return true;
+            }
+        }
     }
 
     // 2. Кони и Химеры
     const knS = [[2, 1], [2, -1], [-2, 1], [-2, -1], [1, 2], [1, -2], [-1, 2], [-1, -2]];
     for (let [dr, dc] of knS) {
         const rr = kr + dr, cc = kc + dc;
-        if (onBd(rr, cc) && bd[rr][cc] && getCol(bd[rr][cc]) === opp) {
-            const t = getType(bd[rr][cc]);
-            if (t === "n" || t === "x") return true;
+        if (onBd(rr, cc) && bd[rr][cc]) {
+            const p = bd[rr][cc];
+            if (getCol(p) === opp) {
+                const t = getType(p);
+                // Chimera is PACIFIST against Kings
+                if (t === "x") continue;
+                if (t === "n") return true;
+            }
         }
     }
 
@@ -317,7 +361,13 @@ window.inCheck = function (col, bd) {
         while (onBd(rr, cc)) {
             const p = bd[rr][cc];
             if (p) {
-                if (getCol(p) === opp && ["r", "q", "z", "a", "c"].includes(getType(p))) return true;
+                if (getCol(p) === opp) {
+                    // ORIGIN CHECK
+                    if (typeof p === 'object' && p.origin === col) {
+                        break; // Traitor pacifism
+                    }
+                    if (["r", "q", "z", "a", "c"].includes(getType(p))) return true;
+                }
                 break;
             }
             rr += dr; cc += dc;
@@ -333,6 +383,14 @@ window.inCheck = function (col, bd) {
             if (p) {
                 if (getCol(p) === opp) {
                     const t = getType(p);
+
+                    // ORIGIN CHECK: If piece has origin, and origin == King's color -> IGNORE
+                    // (But only relevant for promoted pieces that kept origin, like Queen)
+                    if (typeof p === 'object' && p.origin === col) {
+                        // Traitor! Cannot attack original King.
+                        break;
+                    }
+
                     if (t === "b" || t === "q" || t === "z") return true;
                     // Архонты атакуют только на своих цветах по диагонали
                     if (t === "a" && isLight(rr, cc)) return true;
@@ -376,6 +434,33 @@ window.checkGameState = function () {
             }
         }
         if (hasMoves) break;
+    }
+
+    // --- ПРОВЕРКА НА НИЧЬЮ ПО МАТЕРИАЛУ (K vs K) ---
+    // Если на доске остались только Короли — это Ничья.
+    let pieceCount = 0;
+    for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+            if (window.board[r][c]) pieceCount++;
+        }
+    }
+    if (pieceCount === 2) {
+        // Если всего 2 фигуры, это по-любому Короли (иначе игра бы сломалась раньше или это K vs K)
+        // Но даже если это K vs P, пешка может стать ферзем, так что тут аккуратно.
+        // Но пользователь просил именно K vs K.
+        // Проверим, что это именно короли?
+        // Вообще, если 2 фигуры, это 99% короли.
+        // Объявим ничью.
+        document.getElementById("end-title").innerText = "НИЧЬЯ (Мало фигур)";
+        document.getElementById("end-modal").classList.add("active");
+
+        // Кнопки выхода
+        const btnNewMode = document.getElementById("btn-new-mode");
+        const btnRestart = document.getElementById("btn-restart");
+        if (btnRestart) btnRestart.style.display = "inline-flex";
+        if (btnNewMode) btnNewMode.style.display = "none";
+
+        return; // Завершаем
     }
 
     const isCheck = inCheck(window.turn, window.board);
@@ -451,13 +536,15 @@ window.checkLoyaltyLocal = function (wLoss, bLoss) {
 
             // Измена белой пешки
             if (getCol(p) === "white" && lossDiff >= 2 && Math.random() < chance) {
-                window.board[r][c] = "P";
-                log("ИЗМЕНА! Белая пешка перешла к черным.");
+                const origin = (typeof p === 'object' && p.origin) ? p.origin : 'white';
+                window.board[r][c] = { type: 'P', origin: origin };
+                if (window.log) window.log("ИЗМЕНА! Белая пешка перешла к черным.");
             }
             // Измена черной пешки
             if (getCol(p) === "black" && lossDiff <= -2 && Math.random() < chance) {
-                window.board[r][c] = "p";
-                log("ИЗМЕНА! Черная пешка перешла к белым.");
+                const origin = (typeof p === 'object' && p.origin) ? p.origin : 'black';
+                window.board[r][c] = { type: 'p', origin: origin };
+                if (window.log) window.log("ИЗМЕНА! Черная пешка перешла к белым.");
             }
         }
     }

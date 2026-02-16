@@ -49,14 +49,17 @@ window.connectToServer = function () {
         window.log("Система: Связь с сервером установлена успешно.");
     });
 
-    // Ошибка подключения
+    // Ошибка подключения (один раз)
     window.socket.on("connect_error", (err) => {
-        console.error("Socket Error:", err);
-        if (btn) {
-            btn.innerText = "Ошибка";
-            btn.disabled = false;
+        if (!window.connErrorLogged) {
+            console.error("Socket Error:", err);
+            window.connErrorLogged = true;
+            if (btn) {
+                btn.innerText = "Ошибка";
+                btn.disabled = false;
+            }
+            window.log("Ошибка: Не удалось связаться с игровым сервером (повтор в консоли скрыт).");
         }
-        window.log("Ошибка: Не удалось связаться с игровым сервером.");
     });
 
     // Инициализируем слушателей событий

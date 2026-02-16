@@ -268,3 +268,5 @@ input.dark-input {
     width: 100%;
     font-family: monospace;
 }
+/* Traitor Style */
+.cell.traitor .piece { filter: drop-shadow(0 0 8px #d946ef) !important; border: 2px dashed #d946ef; border-radius: 50%; transform: scale(0.9); }
