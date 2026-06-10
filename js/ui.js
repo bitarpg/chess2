@@ -100,6 +100,26 @@ document.getElementById("btn-join").onclick = () => {
     window.joinGame();
 };
 
+const mqttConnectBtn = document.getElementById("btn-mqtt-connect");
+if (mqttConnectBtn) {
+    mqttConnectBtn.onclick = () => window.connectMqttBroker();
+}
+
+const mqttDisconnectBtn = document.getElementById("btn-mqtt-disconnect");
+if (mqttDisconnectBtn) {
+    mqttDisconnectBtn.onclick = () => window.disconnectMqttBroker();
+}
+
+const boardWhiteBtn = document.getElementById("btn-board-white");
+if (boardWhiteBtn) {
+    boardWhiteBtn.onclick = () => window.startPhysicalBoardGame("white");
+}
+
+const boardBlackBtn = document.getElementById("btn-board-black");
+if (boardBlackBtn) {
+    boardBlackBtn.onclick = () => window.startPhysicalBoardGame("black");
+}
+
 document.getElementById("btn-restart").onclick = () => {
     window.initGame();
 };

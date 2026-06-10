@@ -8,6 +8,9 @@ window.socket = null;
 window.currentRoomId = null;
 window.myOnlineColor = null;
 window.isConnected = false;
+window.mqttConnected = false;
+window.isPhysicalBoardGame = false;
+window.physicalBoardColor = null;
 
 
 // ======================================================
@@ -116,6 +119,8 @@ window.setupSocketListeners = function () {
     window.socket.on("game_start", data => {
         window.myOnlineColor = data.color;
         window.currentRoomId = data.roomId;
+        window.isPhysicalBoardGame = !!data.physicalBoard;
+        window.physicalBoardColor = data.physicalColor || null;
         window.moveCount = 0;
 
         // Полная синхронизация состояния доски
@@ -211,6 +216,34 @@ window.setupSocketListeners = function () {
         window.log("ВНИМАНИЕ: Соперник покинул поле боя. Перезагрузка...");
         setTimeout(() => location.reload(), 3000);
     });
+
+    window.socket.on("mqtt_status", status => {
+        window.mqttConnected = !!status.connected;
+        const statusEl = document.getElementById("mqtt-status");
+        if (statusEl) {
+            const tail = status.error || status.message || (status.connected ? "connected" : "disconnected");
+            statusEl.innerText = `MQTT: ${tail}`;
+            statusEl.classList.toggle("text-emerald-400", !!status.connected && !status.error);
+            statusEl.classList.toggle("text-red-400", !!status.error);
+            statusEl.classList.toggle("text-gray-500", !status.connected && !status.error);
+        }
+
+        const boardId = document.getElementById("mqtt-board-id");
+        const host = document.getElementById("mqtt-host");
+        const port = document.getElementById("mqtt-port");
+        if (boardId && !boardId.value) boardId.value = status.boardId || "board01";
+        if (host && !host.value) host.value = status.host || "broker.mqttdashboard.com";
+        if (port && !port.value) port.value = status.port || "1883";
+    });
+
+    window.socket.on("mqtt_board_event", event => {
+        const payload = event && event.payload ? event.payload : {};
+        if (payload.type === "move" && payload.move) {
+            window.log(`MQTT: ход доски ${payload.move}`);
+        } else if (payload.type && payload.type !== "state") {
+            window.log(`MQTT: событие ${payload.type}`);
+        }
+    });
 };
 
 
@@ -250,6 +283,64 @@ window.enterOnlineMode = function (id, status) {
 
     if (rd) rd.innerText = id;
     if (om) om.innerText = status;
+};
+
+window.readMqttConfig = function () {
+    const val = id => {
+        const el = document.getElementById(id);
+        return el ? el.value.trim() : "";
+    };
+
+    return {
+        boardId: val("mqtt-board-id") || "board01",
+        host: val("mqtt-host") || "broker.mqttdashboard.com",
+        port: Number(val("mqtt-port") || 1883),
+        username: val("mqtt-user"),
+        password: val("mqtt-pass")
+    };
+};
+
+window.connectMqttBroker = function () {
+    if (!window.socket || !window.isConnected) {
+        return window.log("Ошибка: сначала подключитесь к серверу.");
+    }
+    window.socket.emit("mqtt_connect", window.readMqttConfig());
+};
+
+window.disconnectMqttBroker = function () {
+    if (!window.socket) return;
+    window.socket.emit("mqtt_disconnect");
+};
+
+window.isClassicMqttPosition = function () {
+    if (window.gameMode !== "classic") return false;
+    if (window.pendingMove || window.pendingPromotion || window.kingDead) return false;
+
+    const allowed = new Set(["p", "n", "b", "r", "q", "k"]);
+    for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+            const piece = window.board[r][c];
+            if (!piece) continue;
+            if (!allowed.has(window.getType(piece))) return false;
+        }
+    }
+    return true;
+};
+
+window.startPhysicalBoardGame = function (physicalColor) {
+    if (!window.socket || !window.isConnected) {
+        return window.log("Ошибка: сначала подключитесь к серверу.");
+    }
+    if (!window.mqttConnected) {
+        return window.log("Ошибка: MQTT-брокер не подключен.");
+    }
+    if (!window.isClassicMqttPosition()) {
+        return window.log("Ошибка: физическая доска поддерживает только классический режим.");
+    }
+
+    window.aiEnabled = false;
+    window.initGame();
+    window.socket.emit("mqtt_start_board_game", { physicalColor });
 };
 
 

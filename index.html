@@ -102,6 +102,45 @@
             </div>
         </div>
 
+        <!-- MQTT / ФИЗИЧЕСКАЯ ДОСКА -->
+        <div class="stat-box mt-4">
+            <div id="mqtt-status" class="text-[10px] text-gray-500 mb-2 font-bold">MQTT: disconnected</div>
+
+            <div class="grid grid-cols-2 gap-2 mb-2">
+                <div>
+                    <label class="text-[10px] text-gray-500 block mb-1">Board ID</label>
+                    <input id="mqtt-board-id" type="text" value="board01"
+                        class="dark-input text-xs w-full bg-slate-900 border-slate-700 rounded p-1 text-white outline-none">
+                </div>
+                <div>
+                    <label class="text-[10px] text-gray-500 block mb-1">Port</label>
+                    <input id="mqtt-port" type="number" value="1883"
+                        class="dark-input text-xs w-full bg-slate-900 border-slate-700 rounded p-1 text-white outline-none">
+                </div>
+            </div>
+
+            <label class="text-[10px] text-gray-500 block mb-1">Broker host</label>
+            <input id="mqtt-host" type="text" value="broker.mqttdashboard.com"
+                class="dark-input mb-2 text-xs w-full bg-slate-900 border-slate-700 rounded p-1 text-white outline-none">
+
+            <div class="grid grid-cols-2 gap-2 mb-2">
+                <input id="mqtt-user" type="text" placeholder="user"
+                    class="dark-input text-xs w-full bg-slate-900 border-slate-700 rounded p-1 text-white outline-none">
+                <input id="mqtt-pass" type="password" placeholder="password"
+                    class="dark-input text-xs w-full bg-slate-900 border-slate-700 rounded p-1 text-white outline-none">
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 mb-2">
+                <button id="btn-mqtt-connect" class="btn btn-primary text-xs m-0">MQTT Connect</button>
+                <button id="btn-mqtt-disconnect" class="btn text-xs m-0 bg-slate-800">Disconnect</button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+                <button id="btn-board-white" class="btn text-xs m-0 bg-emerald-700">Board White</button>
+                <button id="btn-board-black" class="btn text-xs m-0 bg-indigo-700">Board Black</button>
+            </div>
+        </div>
+
         <!-- ПОТЕРИ -->
         <div class="stat-box text-xs mt-4">
             <div class="flex justify-between mb-1">
