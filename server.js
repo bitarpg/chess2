@@ -267,6 +267,9 @@ function applyUciMoveToBoard(board, uci, castlingState) {
     if (move.promotion) {
         placedPiece = color === "white" ? move.promotion : move.promotion.toUpperCase();
     }
+    const enPassant = type === "p" && Math.abs(move.to.r - move.from.r) === 2
+        ? { r: (move.to.r + move.from.r) / 2, c: move.from.c }
+        : null;
 
     nextBoard[move.to.r][move.to.c] = placedPiece;
     nextBoard[move.from.r][move.from.c] = null;
@@ -286,7 +289,8 @@ function applyUciMoveToBoard(board, uci, castlingState) {
         board: nextBoard,
         turn: oppositeColor(color),
         lastMove: { from: move.from, to: move.to },
-        castling
+        castling,
+        enPassant
     };
 }
 
@@ -295,10 +299,51 @@ function isClassicBoard(board) {
     return board.every(row => row.every(piece => !piece || allowed.has(pieceType(piece))));
 }
 
-function handleMqttMessage(topic, payload) {
-    io.emit("mqtt_board_event", { topic, payload });
+function boardToFen(board, turn = "white", castlingState = null, enPassant = null, moveCount = 0) {
+    const rows = board.map(row => {
+        let fenRow = "";
+        let empty = 0;
 
-    if (payload.type !== "move" || !payload.move) return;
+        for (const piece of row) {
+            if (!piece) {
+                empty += 1;
+                continue;
+            }
+            if (empty > 0) {
+                fenRow += String(empty);
+                empty = 0;
+            }
+            const type = pieceType(piece);
+            const color = pieceColor(piece);
+            fenRow += color === "white" ? type.toUpperCase() : type;
+        }
+
+        if (empty > 0) fenRow += String(empty);
+        return fenRow;
+    });
+
+    const castling = [];
+    const state = castlingState || getDefaultCastling();
+    if (state.white && state.white.k && state.white.r) castling.push("K");
+    if (state.white && state.white.k && state.white.l) castling.push("Q");
+    if (state.black && state.black.k && state.black.r) castling.push("k");
+    if (state.black && state.black.k && state.black.l) castling.push("q");
+
+    const epSquare = enPassant ? cellToSquare(enPassant).toLowerCase() : "-";
+    const fullmove = Math.max(1, Math.floor((Number(moveCount) || 0) / 2) + 1);
+    return `${rows.join("/")} ${turn === "black" ? "b" : "w"} ${castling.join("") || "-"} ${epSquare} 0 ${fullmove}`;
+}
+
+function handleMqttMessage(topic, payload) {
+    const isPlayerEvent = topic.endsWith("/player/event");
+    const isClientEvent = topic.endsWith("/client/event");
+    const noisyClientEvent = isClientEvent && ["uart_tx", "uart_rx"].includes(payload.type);
+
+    if (!noisyClientEvent) {
+        io.emit("mqtt_board_event", { topic, payload });
+    }
+
+    if (!isPlayerEvent || payload.type !== "move" || !payload.move) return;
 
     const uci = String(payload.move).toUpperCase();
     if (mqttState.pendingOutbound.has(uci)) {
@@ -322,6 +367,7 @@ function handleMqttMessage(topic, payload) {
     room.board = applied.board;
     room.turn = applied.turn;
     room.castling = applied.castling;
+    room.enPassant = applied.enPassant;
     room.moveCount = (room.moveCount || 0) + 1;
 
     io.in(room.id).emit("receive_move", {
@@ -421,6 +467,35 @@ io.on('connection', (socket) => {
         broadcastRoomList();
     });
 
+    socket.on("mqtt_sync_fen", (data = {}) => {
+        if (!mqttState.connected) {
+            socket.emit("mqtt_status", getMqttPublicStatus({ error: "MQTT is not connected" }));
+            return;
+        }
+
+        const roomId = data.roomId || mqttState.activeRoomId;
+        const room = rooms[roomId];
+        if (!room || !room.board) {
+            socket.emit("mqtt_status", getMqttPublicStatus({ error: "No active board room to sync" }));
+            return;
+        }
+        if (room.gameMode !== "classic" || !isClassicBoard(room.board)) {
+            socket.emit("mqtt_status", getMqttPublicStatus({ error: "Only classic board can be synced to MQTT" }));
+            return;
+        }
+
+        const fen = boardToFen(room.board, room.turn, room.castling, room.enPassant, room.moveCount);
+        publishMqtt(
+            "client/cmd",
+            mqttPayload("sync_fen", {
+                fen,
+                mode: room.physicalColor ? room.physicalColor.toUpperCase() : "PVP",
+                origin: "render-site"
+            })
+        );
+        emitMqttStatus({ message: "FEN sync sent" });
+    });
+
     // --- СОЗДАНИЕ НОВОЙ КОМНАТЫ ---
     socket.on('create_room', (roomId) => {
         if (rooms[roomId]) {
@@ -500,6 +575,7 @@ io.on('connection', (socket) => {
             mode,
             moveCount,
             chimeraTracker,
+            enPassant,
             newModePlayer,
             whiteRevived,
             blackRevived
@@ -518,6 +594,7 @@ io.on('connection', (socket) => {
             room.whiteRevived = whiteRevived;
             room.blackRevived = blackRevived;
             room.moveCount = moveCount;
+            room.enPassant = enPassant || null;
 
             if (room.physical) {
                 const mover = oppositeColor(turn);

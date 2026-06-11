@@ -284,6 +284,14 @@ window.doMove = function (mv) {
     else {
         // ВЗЯТИЕ НА ПРОХОДЕ
         if (mv.ep) {
+            const epPawn = window.board[start.r][mv.c];
+            if (!epPawn || window.getType(epPawn) !== "p" || window.getCol(epPawn) === col) {
+                window.log("EN PASSANT: Нельзя брать на проходе свою фигуру.");
+                window.selected = null;
+                window.moves = [];
+                window.render();
+                return;
+            }
             window.board[start.r][mv.c] = null;
             window.log("EN PASSANT: Взятие на проходе!");
         }
@@ -293,7 +301,12 @@ window.doMove = function (mv) {
 
         // Если пешка прыгнула на 2 клетки — ставим флаг EP
         if (type === "p" && Math.abs(mv.r - start.r) === 2) {
-            window.enPassant = { r: (start.r + mv.r) / 2, c: start.c };
+            window.enPassant = {
+                r: (start.r + mv.r) / 2,
+                c: start.c,
+                pawnColor: col,
+                captureColor: col === "white" ? "black" : "white"
+            };
         }
 
         if (type === "p" && (mv.r === 0 || mv.r === 7)) {

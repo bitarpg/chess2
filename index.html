@@ -23,7 +23,8 @@
 <body class="flex flex-col md:flex-row h-screen">
     <!-- ПАНЕЛЬ УПРАВЛЕНИЯ (SIDEBAR) -->
     <div
-        class="w-full md:w-80 bg-[#03104a] p-6 border-r border-[#1e293b] flex flex-col z-20 shadow-2xl overflow-y-auto">
+        class="w-full md:w-80 bg-[#03104a] p-6 border-r border-[#1e293b] flex flex-col z-20 shadow-2xl overflow-y-auto"
+        style="height: 100vh; min-height: 0;">
         <h1
             class="text-3xl font-bold title-font mb-1 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">
             ШАХМАТЫ 2.0
@@ -139,6 +140,7 @@
                 <button id="btn-board-white" class="btn text-xs m-0 bg-emerald-700">Board White</button>
                 <button id="btn-board-black" class="btn text-xs m-0 bg-indigo-700">Board Black</button>
             </div>
+            <button id="btn-sync-fen" class="btn text-xs mt-2 mb-0 bg-amber-700">Синхронизировать</button>
         </div>
 
         <!-- ПОТЕРИ -->
@@ -155,7 +157,8 @@
 
         <!-- ЛОГ ИГРЫ -->
         <div id="log"
-            class="flex-1 bg-black p-3 font-mono text-[10px] text-green-500 overflow-y-auto border border-gray-800 rounded leading-relaxed mt-4">
+            class="flex-none bg-black p-3 font-mono text-[10px] text-green-500 overflow-y-auto overflow-x-hidden border border-gray-800 rounded leading-relaxed mt-4"
+            style="height: 34vh; min-height: 220px; max-height: 420px;">
             <div>> Инициализация системы...</div>
         </div>
 

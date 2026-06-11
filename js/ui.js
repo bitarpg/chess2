@@ -120,6 +120,11 @@ if (boardBlackBtn) {
     boardBlackBtn.onclick = () => window.startPhysicalBoardGame("black");
 }
 
+const syncFenBtn = document.getElementById("btn-sync-fen");
+if (syncFenBtn) {
+    syncFenBtn.onclick = () => window.syncPhysicalBoardFen();
+}
+
 document.getElementById("btn-restart").onclick = () => {
     window.initGame();
 };

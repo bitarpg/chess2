@@ -343,6 +343,24 @@ window.startPhysicalBoardGame = function (physicalColor) {
     window.socket.emit("mqtt_start_board_game", { physicalColor });
 };
 
+window.syncPhysicalBoardFen = function () {
+    if (!window.socket || !window.isConnected) {
+        return window.log("Ошибка: сначала подключитесь к серверу.");
+    }
+    if (!window.mqttConnected) {
+        return window.log("Ошибка: MQTT-брокер не подключен.");
+    }
+    if (!window.currentRoomId) {
+        return window.log("Ошибка: нет активной комнаты для синхронизации.");
+    }
+    if (!window.isClassicMqttPosition()) {
+        return window.log("Ошибка: синхронизация доступна только для классической доски.");
+    }
+
+    window.socket.emit("mqtt_sync_fen", { roomId: window.currentRoomId });
+    window.log("MQTT: отправлен запрос синхронизации FEN.");
+};
+
 
 // ======================================================
 // ОТПРАВКА ХОДА В ОБЛАКО (ОБНОВЛЕНО: ПОЛНЫЙ ПАКЕТ ДАННЫХ)
@@ -368,6 +386,7 @@ window.sendMoveToCloud = function (
         mode: modeState || window.gameMode,
         moveCount: mCount,
         chimeraTracker: window.chimeraTracker,
+        enPassant: window.enPassant,
 
         // Флаги состояния (чтобы оппонент знал о воскрешении и смене цели мата)
         newModePlayer: window.newModePlayer,

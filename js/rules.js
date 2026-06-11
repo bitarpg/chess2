@@ -102,7 +102,12 @@ window.getMoves = function (r, c, safe = true) {
             }
             // Взятие на проходе (En Passant)
             else if (window.enPassant && window.enPassant.r === tr && window.enPassant.c === tc) {
-                m.push({ r: tr, c: tc, atk: true, ep: true });
+                const epPawn = window.board[r][tc];
+                const epCaptureColor = window.enPassant.captureColor;
+                const canCaptureEp = !epCaptureColor || epCaptureColor === col;
+                if (canCaptureEp && epPawn && getType(epPawn) === "p" && getCol(epPawn) !== col) {
+                    m.push({ r: tr, c: tc, atk: true, ep: true });
+                }
             }
         });
     }
